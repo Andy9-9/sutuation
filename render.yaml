@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: sutuation-sync-server
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node sync_server.js
+    envVars:
+      - key: PORT
+        value: 10000

@@ -3623,6 +3623,27 @@
                             </button>
                         </div>
                     </div>
+
+                    <!-- KÊNH ĐỒNG BỘ ĐÁM MÂY TOÀN CẦU (NETLIFY / INTERNET) -->
+                    <div style="margin-top: 1rem; padding-top: 0.85rem; border-top: 1.5px dashed #A5D6A7;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; flex-wrap: wrap; gap: 0.5rem;">
+                            <span style="font-size: 0.88rem; font-weight: 700; color: #004D40; display: inline-flex; align-items: center; gap: 0.35rem;">
+                                <span>☁️</span> Kênh Đám Mây Toàn Cầu (Cloud Live Relay):
+                            </span>
+                            <span style="font-size: 0.78rem; font-weight: 700; color: #00796B; background: #E0F2F1; padding: 0.2rem 0.55rem; border-radius: 10px;">
+                                Phòng: <strong id="syncCurrentRoomCode">sutuation_classroom_live_2026</strong>
+                            </span>
+                        </div>
+                        <p style="font-size: 0.82rem; color: #00695C; margin-bottom: 0.6rem; line-height: 1.5;">
+                            Khi chạy trên <strong>Netlify</strong> hoặc mạng Internet tự do: Bất kỳ ai tải bài hay xóa bài thì <strong>mọi máy tính/điện thoại đều thấy ngay lập tức</strong>. Thầy/Cô có thể đặt mã phòng riêng (VD: <code>lop12a1</code>) để đồng bộ riêng theo lớp.
+                        </p>
+                        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                            <input type="text" id="syncRoomCodeInput" class="input-control" value="sutuation_classroom_live_2026" placeholder="Mã phòng học (VD: lop10a1, lop12a3)" style="flex: 1; min-width: 220px; font-size: 0.85rem;" />
+                            <button type="button" class="btn-primary" style="background: #00695C; border-color: #004D40; font-size: 0.85rem; padding: 0.45rem 1rem;" onclick="applyCloudRoomCodeChange()">
+                                ☁️ Đổi Phòng Học
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- 3. SAO LƯU & PHỤC HỒI SNAPSHOT CSDL TOÀN DIỆN (1-CLICK BACKUP / RESTORE) -->

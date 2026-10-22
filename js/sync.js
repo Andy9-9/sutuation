@@ -65,6 +65,208 @@ let syncHeartbeatTimer = null;
 let sseEventSource = null;
 let serverNetworkInfo = null;
 
+// ==========================================
+// ĐỘNG CƠ ĐỒNG BỘ ĐÁM MÂY TOÀN CẦU (GLOBAL CLOUD REALTIME RELAY)
+// Đảm bảo bất kỳ ai tải bài lên hoặc xóa bài thì mọi người dùng
+// trên mọi thiết bị (Netlify / Internet) đều thấy ngay lập tức.
+// ==========================================
+
+function getMyClientId() {
+    if (typeof window === "undefined") return "node_client";
+    try {
+        let id = sessionStorage.getItem("situation_client_id");
+        if (!id) {
+            id = "c_" + Date.now().toString(36) + "_" + Math.random().toString(36).substr(2, 6);
+            sessionStorage.setItem("situation_client_id", id);
+        }
+        return id;
+    } catch (e) {
+        return "c_fallback_" + Math.random().toString(36).substr(2, 6);
+    }
+}
+
+function getCloudRoomCode() {
+    if (typeof window !== "undefined" && window.location && window.location.search) {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            const r = params.get("room") || params.get("lop") || params.get("class");
+            if (r && r.trim()) {
+                const clean = r.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+                if (clean) {
+                    if (typeof localStorage !== "undefined") {
+                        localStorage.setItem("situation_room_code", clean);
+                    }
+                    return clean;
+                }
+            }
+        } catch (e) {}
+    }
+    try {
+        if (typeof localStorage !== "undefined") {
+            const saved = localStorage.getItem("situation_room_code");
+            if (saved && saved.trim()) return saved.trim();
+        }
+    } catch (e) {}
+    return "sutuation_classroom_live_2026";
+}
+
+function getCloudChannelUrl() {
+    const room = getCloudRoomCode();
+    return `https://ntfy.sh/${room}`;
+}
+
+let cloudEventSource = null;
+let isCloudOnline = false;
+
+function setCloudOnlineState(online) {
+    if (isCloudOnline !== online) {
+        isCloudOnline = online;
+        updateSyncStatusDisplay();
+    }
+}
+
+function connectCloudSSE() {
+    if (typeof EventSource === "undefined") return;
+    const url = getCloudChannelUrl();
+    if (!url) return;
+
+    if (cloudEventSource && cloudEventSource.readyState !== EventSource.CLOSED) {
+        return;
+    }
+
+    try {
+        if (cloudEventSource) {
+            try { cloudEventSource.close(); } catch (e) {}
+            cloudEventSource = null;
+        }
+
+        cloudEventSource = new EventSource(`${url}/sse`);
+        cloudEventSource.onopen = () => {
+            setCloudOnlineState(true);
+        };
+
+        cloudEventSource.onmessage = async (event) => {
+            try {
+                if (!event || !event.data) return;
+                const raw = JSON.parse(event.data);
+                if (!raw || raw.event !== 'message') return;
+
+                setCloudOnlineState(true);
+
+                let msgObj = null;
+                if (raw.attachment && raw.attachment.url) {
+                    try {
+                        const attRes = await fetch(raw.attachment.url);
+                        if (attRes.ok) {
+                            msgObj = await attRes.json();
+                        }
+                    } catch (err) {}
+                } else if (raw.message) {
+                    try {
+                        msgObj = JSON.parse(raw.message);
+                    } catch (err) {}
+                }
+
+                if (msgObj && msgObj.type) {
+                    if (msgObj.senderId && msgObj.senderId === getMyClientId()) {
+                        return; // Bỏ qua sự kiện của chính mình
+                    }
+                    handleIncomingSyncEvent(msgObj, { fromCloud: true });
+                }
+            } catch (e) {}
+        };
+
+        cloudEventSource.onerror = () => {
+            // Tự động kết nối lại theo cơ chế chuẩn
+        };
+    } catch (e) {}
+}
+
+async function publishEventToCloud(msg) {
+    if (typeof fetch === "undefined") return;
+    const url = getCloudChannelUrl();
+    if (!url) return;
+    try {
+        const bodyStr = JSON.stringify(msg);
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Title': 'Sử Tuation Realtime Event'
+            },
+            body: bodyStr
+        });
+        if (res && res.ok) {
+            setCloudOnlineState(true);
+        }
+    } catch (e) {
+        // Ngoại tuyến không gây lỗi ứng dụng
+    }
+}
+
+let hasPolledCloudHistory = false;
+async function pollCloudRecentHistory(force = false) {
+    if (typeof fetch === "undefined") return;
+    const url = getCloudChannelUrl();
+    if (!url) return;
+
+    try {
+        const res = await fetch(`${url}/json?poll=1&since=all`, {
+            headers: { 'Cache-Control': 'no-cache' }
+        });
+        if (!res.ok) return;
+
+        const text = await res.text();
+        const lines = text.trim().split('\n').filter(Boolean);
+        if (lines.length === 0) return;
+
+        const myId = getMyClientId();
+        let changed = false;
+
+        for (const line of lines) {
+            try {
+                const raw = JSON.parse(line);
+                if (raw.event !== 'message') continue;
+
+                let msgObj = null;
+                if (raw.attachment && raw.attachment.url) {
+                    try {
+                        const attRes = await fetch(raw.attachment.url);
+                        if (attRes.ok) msgObj = await attRes.json();
+                    } catch (e) {}
+                } else if (raw.message) {
+                    try {
+                        msgObj = JSON.parse(raw.message);
+                    } catch (e) {}
+                }
+
+                if (msgObj && msgObj.type && msgObj.senderId !== myId) {
+                    commitDatabaseMutation(msgObj.type, msgObj.payload || {}, {
+                        fromBroadcast: true,
+                        fromServer: true,
+                        fromCloud: true,
+                        silentToast: true
+                    });
+                    changed = true;
+                }
+            } catch (e) {}
+        }
+
+        if (changed) {
+            setCloudOnlineState(true);
+            hasPolledCloudHistory = true;
+        }
+    } catch (e) {}
+}
+
+function requestCloudStateSnapshot() {
+    publishEventToCloud({
+        type: "REQUEST_CLASSROOM_SNAPSHOT",
+        senderId: getMyClientId(),
+        timestamp: Date.now()
+    });
+}
+
         function getActiveDetailModalCode() {
             const m = document.getElementById("detailModal");
             if (m && m.classList.contains("open")) {
@@ -156,6 +358,13 @@ let serverNetworkInfo = null;
             // 7. Khởi chạy luồng SSE Realtime & Kiểm tra kết nối máy chủ
             connectServerSSE();
             checkServerSync(false);
+
+            // 8. Khởi chạy luồng Đám mây Toàn cầu (Global Cloud Live Relay)
+            connectCloudSSE();
+            pollCloudRecentHistory();
+            setTimeout(() => {
+                requestCloudStateSnapshot();
+            }, 1000);
 
             updateTeacherSubmissionsCountBadge();
             updateSyncStatusDisplay();
@@ -411,14 +620,25 @@ let serverNetworkInfo = null;
                 broadcastSyncEvent(mutationType, payload);
             }
 
-            // 4. PHÁT SÓNG REALTIME QUA MÁY CHỦ MẠNG LAN / CLOUD
+            // 4. PHÁT SÓNG REALTIME QUA MÁY CHỦ MẠNG LAN / SERVER
             if (!options.fromServer && !options.fromBroadcast && mutationType !== 'FULL_DATABASE_SYNC') {
                 sendMutationToServer(mutationType, payload);
+            }
+
+            // 5. PHÁT SÓNG REALTIME QUA ĐÁM MÂY TOÀN CẦU (GLOBAL CLOUD CHANNEL)
+            if (!options.fromCloud && !options.fromBroadcast && mutationType !== 'FULL_DATABASE_SYNC') {
+                publishEventToCloud({
+                    type: mutationType,
+                    payload: payload,
+                    senderId: getMyClientId(),
+                    room: getCloudRoomCode(),
+                    timestamp: Date.now()
+                });
             }
         }
 
         function broadcastSyncEvent(type, payload) {
-            const msg = { type, payload, timestamp: Date.now() };
+            const msg = { type, payload, senderId: getMyClientId(), timestamp: Date.now() };
             if (syncChannel) {
                 try {
                     syncChannel.postMessage(msg);
@@ -429,81 +649,116 @@ let serverNetworkInfo = null;
             } catch (e) { }
         }
 
-        function handleIncomingSyncEvent(data) {
+        function handleIncomingSyncEvent(data, options = {}) {
             if (!data || !data.type) return;
+
+            // Bỏ qua nếu là sự kiện do chính tab/thiết bị này phát ra
+            if (data.senderId && data.senderId === getMyClientId()) return;
+
+            // Xử lý yêu cầu đồng bộ snapshot toàn phòng học
+            if (data.type === "REQUEST_CLASSROOM_SNAPSHOT") {
+                const savedTeacherPosts = localStorage.getItem("situation_teacher_posts");
+                const deletedCodes = getDeletedCodes();
+                if ((savedTeacherPosts && savedTeacherPosts !== "[]") || deletedCodes.length > 0) {
+                    try {
+                        publishEventToCloud({
+                            type: "CLASSROOM_SNAPSHOT_RESPONSE",
+                            targetId: data.senderId,
+                            senderId: getMyClientId(),
+                            room: getCloudRoomCode(),
+                            payload: {
+                                teacherPosts: JSON.parse(savedTeacherPosts || "[]"),
+                                teacherDocs: JSON.parse(localStorage.getItem("situation_teacher_docs") || "[]"),
+                                customDocs: JSON.parse(localStorage.getItem("situation_custom_docs") || "[]"),
+                                deletedCodes: deletedCodes,
+                                studentSubmissions: studentSubmissions
+                            }
+                        });
+                    } catch (e) {}
+                }
+                return;
+            } else if (data.type === "CLASSROOM_SNAPSHOT_RESPONSE") {
+                if (data.targetId === getMyClientId() && data.payload) {
+                    applyFullServerSync(data.payload);
+                }
+                return;
+            }
+
             const payload = data.payload || {};
 
-            // Thực hiện biến đổi dữ liệu với cờ fromBroadcast = true và fromServer = true để triệt tiêu vòng lặp echo
-            commitDatabaseMutation(data.type, payload, { fromBroadcast: true, fromServer: true });
+            // Thực hiện biến đổi dữ liệu với cờ fromBroadcast = true, fromServer = true, fromCloud = true để triệt tiêu vòng lặp echo
+            commitDatabaseMutation(data.type, payload, { fromBroadcast: true, fromServer: true, fromCloud: true });
 
-            // Hiển thị Toast thông báo tương ứng cho người dùng
-            if (data.type === "TEACHER_POST_SAVED") {
-                const post = payload.post || payload;
-                showSituationToast({
-                    title: "🔔 THẦY/CÔ VỪA ĐĂNG BÀI MỚI!",
-                    message: `${payload.author || post.author || "Giáo viên"} (${post.school || "THPT"}) vừa biên soạn: "${payload.lesson || post.lesson}".`,
-                    badge: "👨‍🏫",
-                    code: post.code,
-                    actionText: "👁️ Xem bài ngay",
-                    onAction: () => openDetailModal(post.code)
-                });
-            } else if (data.type === "TEACHER_POST_DELETED") {
-                showSituationToast({
-                    title: "🗑️ Cập nhật Danh mục",
-                    message: `Bài học mã ${payload.code} đã được giáo viên xóa khỏi hệ thống.`,
-                    badge: "ℹ️"
-                });
-            } else if (data.type === "TEACHER_POSTS_BULK_DELETED") {
-                const count = payload.codes ? payload.codes.length : 0;
-                showSituationToast({
-                    title: "🗑️ Cập nhật Danh mục",
-                    message: `Giáo viên đã xóa ${count} bài đăng khỏi hệ thống.`,
-                    badge: "ℹ️"
-                });
-            } else if (data.type === "DOCUMENT_SAVED") {
-                showSituationToast({
-                    title: "📁 Kho Tư liệu Cập nhật",
-                    message: `Tài liệu mới đã được thêm vào Kho kiến thức.`,
-                    badge: "📚"
-                });
-            } else if (data.type === "DOCUMENT_DELETED") {
-                showSituationToast({
-                    title: "📁 Kho Tư liệu Cập nhật",
-                    message: `Một tài liệu đã được gỡ khỏi Kho kiến thức.`,
-                    badge: "ℹ️"
-                });
-            } else if (data.type === "STUDENT_SUBMISSION_CREATED") {
-                const sub = payload;
-                showSituationToast({
-                    title: "📬 BÀI NỘP MỚI TỪ HỌC SINH!",
-                    message: `${sub.studentName} vừa nộp kịch bản phân vai [${sub.roleName}] cho bài "${sub.lessonTitle || sub.postCode}".`,
-                    badge: "🎓",
-                    code: sub.postCode,
-                    actionText: "📝 Xem & Chấm bài",
-                    onAction: () => {
-                        if (!isTeacherAuthenticated) openTeacherAuthGate(sub.postCode);
-                        else {
-                            openTeacherPostModal();
-                            switchTeacherModalTab('submissions');
+            // Hiển thị Toast thông báo tương ứng cho người dùng nếu không bật chế độ im lặng
+            if (!options.silentToast) {
+                if (data.type === "TEACHER_POST_SAVED") {
+                    const post = payload.post || payload;
+                    showSituationToast({
+                        title: "🔔 THẦY/CÔ VỪA ĐĂNG BÀI MỚI!",
+                        message: `${payload.author || post.author || "Giáo viên"} (${post.school || "THPT"}) vừa biên soạn: "${payload.lesson || post.lesson}".`,
+                        badge: "👨‍🏫",
+                        code: post.code,
+                        actionText: "👁️ Xem bài ngay",
+                        onAction: () => openDetailModal(post.code, true)
+                    });
+                } else if (data.type === "TEACHER_POST_DELETED") {
+                    showSituationToast({
+                        title: "🗑️ Cập nhật Danh mục",
+                        message: `Bài học mã ${payload.code} đã được giáo viên xóa khỏi hệ thống.`,
+                        badge: "ℹ️"
+                    });
+                } else if (data.type === "TEACHER_POSTS_BULK_DELETED") {
+                    const count = payload.codes ? payload.codes.length : 0;
+                    showSituationToast({
+                        title: "🗑️ Cập nhật Danh mục",
+                        message: `Giáo viên đã xóa ${count} bài đăng khỏi hệ thống.`,
+                        badge: "ℹ️"
+                    });
+                } else if (data.type === "DOCUMENT_SAVED") {
+                    showSituationToast({
+                        title: "📁 Kho Tư liệu Cập nhật",
+                        message: `Tài liệu mới đã được thêm vào Kho kiến thức.`,
+                        badge: "📚"
+                    });
+                } else if (data.type === "DOCUMENT_DELETED") {
+                    showSituationToast({
+                        title: "📁 Kho Tư liệu Cập nhật",
+                        message: `Một tài liệu đã được gỡ khỏi Kho kiến thức.`,
+                        badge: "ℹ️"
+                    });
+                } else if (data.type === "STUDENT_SUBMISSION_CREATED") {
+                    const sub = payload;
+                    showSituationToast({
+                        title: "📬 BÀI NỘP MỚI TỪ HỌC SINH!",
+                        message: `${sub.studentName} vừa nộp kịch bản phân vai [${sub.roleName}] cho bài "${sub.lessonTitle || sub.postCode}".`,
+                        badge: "🎓",
+                        code: sub.postCode,
+                        actionText: "📝 Xem & Chấm bài",
+                        onAction: () => {
+                            if (!isTeacherAuthenticated) openTeacherAuthGate(sub.postCode);
+                            else {
+                                openTeacherPostModal();
+                                switchTeacherModalTab('submissions');
+                            }
                         }
-                    }
-                });
-            } else if (data.type === "TEACHER_FEEDBACK_SAVED") {
-                const sub = payload;
-                showSituationToast({
-                    title: "⭐ THẦY/CÔ ĐÃ CHẤM ĐIỂM KỊCH BẢN!",
-                    message: `Bài kịch bản của ${sub.studentName} đã được chấm: ${sub.teacherGrade}. Nhấp để xem nhận xét!`,
-                    badge: "🏆",
-                    code: sub.postCode,
-                    actionText: "📖 Xem lời phê",
-                    onAction: () => openDetailModal(sub.postCode)
-                });
-            } else if (data.type === "RESTORE_DEFAULT_DATA") {
-                showSituationToast({
-                    title: "🔄 Khôi phục Dữ liệu Gốc",
-                    message: "Toàn bộ 42 bài học chuẩn SGK đã được khôi phục đồng bộ trên mọi màn hình.",
-                    badge: "🔄"
-                });
+                    });
+                } else if (data.type === "TEACHER_FEEDBACK_SAVED") {
+                    const sub = payload;
+                    showSituationToast({
+                        title: "⭐ THẦY/CÔ ĐÃ CHẤM ĐIỂM KỊCH BẢN!",
+                        message: `Bài kịch bản của ${sub.studentName} đã được chấm: ${sub.teacherGrade}. Nhấp để xem nhận xét!`,
+                        badge: "🏆",
+                        code: sub.postCode,
+                        actionText: "📖 Xem lời phê",
+                        onAction: () => openDetailModal(sub.postCode, true)
+                    });
+                } else if (data.type === "RESTORE_DEFAULT_DATA") {
+                    showSituationToast({
+                        title: "🔄 Khôi phục Dữ liệu Gốc",
+                        message: "Toàn bộ 42 bài học chuẩn SGK đã được khôi phục đồng bộ trên mọi màn hình.",
+                        badge: "🔄"
+                    });
+                }
             }
         }
 
@@ -631,6 +886,14 @@ let serverNetworkInfo = null;
                     }
                 }
             }
+
+            // Đảm bảo kênh Cloud SSE luôn mở để bắt kịp sự kiện tải lên và xóa bài
+            if (typeof EventSource !== "undefined") {
+                if (!cloudEventSource || cloudEventSource.readyState === EventSource.CLOSED) {
+                    connectCloudSSE();
+                }
+            }
+
             // 2. Làm tươi các chỉ số audit
             updateSyncAuditDisplay();
         }
@@ -695,6 +958,9 @@ let serverNetworkInfo = null;
             const statusText = document.getElementById("syncServerBadgeStatus");
             const navText = document.getElementById("syncStatusBadgeText");
             const navDot = document.getElementById("syncPulseDot");
+            const roomEl = document.getElementById("syncCurrentRoomCode");
+            if (roomEl) roomEl.textContent = getCloudRoomCode();
+
             const isFileProto = (typeof window !== "undefined" && window.location && window.location.protocol === "file:");
             const hostname = (typeof window !== "undefined" && window.location && window.location.hostname || "").toLowerCase();
             const isNetlify = hostname.endsWith("netlify.app");
@@ -704,11 +970,22 @@ let serverNetworkInfo = null;
                     badge.style.background = "#C8E6C9";
                     badge.style.color = "#1B5E20";
                 }
-                if (statusText) statusText.textContent = "🟢 Máy chủ Online (Đồng bộ Đa thiết bị 100%)";
+                if (statusText) statusText.textContent = "🟢 Máy chủ + Cloud Online (Đồng bộ Toàn cầu 100%)";
                 if (navText) navText.textContent = "🟢 Live Sync 100%";
                 if (navDot) {
                     navDot.style.background = "#4CAF50";
                     navDot.style.boxShadow = "0 0 8px #81C784";
+                }
+            } else if (isCloudOnline) {
+                if (badge) {
+                    badge.style.background = "#E0F2F1";
+                    badge.style.color = "#004D40";
+                }
+                if (statusText) statusText.textContent = `🌐 Đám mây Toàn cầu Live (Phòng: ${getCloudRoomCode()})`;
+                if (navText) navText.textContent = "🌐 Cloud Live 100%";
+                if (navDot) {
+                    navDot.style.background = "#00897B";
+                    navDot.style.boxShadow = "0 0 8px #80CBC4";
                 }
             } else {
                 if (badge) {
@@ -718,10 +995,10 @@ let serverNetworkInfo = null;
                 if (statusText) {
                     statusText.textContent = isFileProto
                         ? "⚠️ Đang mở dạng file:// (Khuyến nghị mở qua http://localhost:8080/duan.html để tránh bị Safari cô lập)"
-                        : (isNetlify ? "🌐 Netlify Cloud (Sẵn sàng • Chế độ Client-First)" : "🟡 Chế độ Nội bộ Trình duyệt & Đa Tab");
+                        : (isNetlify ? `🌐 Netlify Cloud (Phòng: ${getCloudRoomCode()})` : "🟡 Chế độ Nội bộ Trình duyệt & Đa Tab");
                 }
                 if (navText) {
-                    navText.textContent = isFileProto ? "⚠️ Mở qua :8080" : (isNetlify ? "🌐 Netlify Live" : "📡 Đồng bộ 100%");
+                    navText.textContent = isFileProto ? "⚠️ Mở qua :8080" : (isNetlify ? "🌐 Netlify Cloud" : "📡 Đồng bộ 100%");
                 }
                 if (navDot) {
                     navDot.style.background = isFileProto ? "#FF9800" : (isNetlify ? "#00897B" : "#81C784");
@@ -756,6 +1033,31 @@ let serverNetworkInfo = null;
             } catch (e) { }
             connectServerSSE();
             checkServerSync(true);
+        }
+
+        function applyCloudRoomCodeChange() {
+            const input = document.getElementById("syncRoomCodeInput");
+            if (!input) return;
+            const newRoom = input.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+            if (!newRoom) {
+                alert("Vui lòng nhập mã phòng hợp lệ (chữ và số không dấu)");
+                return;
+            }
+            try {
+                localStorage.setItem("situation_room_code", newRoom);
+            } catch (e) {}
+            if (cloudEventSource) {
+                try { cloudEventSource.close(); } catch (e) {}
+                cloudEventSource = null;
+            }
+            connectCloudSSE();
+            pollCloudRecentHistory();
+            updateSyncStatusDisplay();
+            showSituationToast({
+                title: "🌐 ĐÃ ĐỔI PHÒNG HỌC!",
+                message: `Đang kết nối phòng: ${newRoom}`,
+                badge: "🏫"
+            });
         }
 
         // ==========================================
@@ -874,6 +1176,12 @@ let serverNetworkInfo = null;
             if (syncServerUrl && typeof checkServerSync === 'function') {
                 checkServerSync(false);
             }
+            if (typeof connectCloudSSE === 'function') {
+                connectCloudSSE();
+            }
+            if (typeof pollCloudRecentHistory === 'function') {
+                pollCloudRecentHistory();
+            }
         }
 
 if (typeof window !== "undefined") {
@@ -885,6 +1193,11 @@ if (typeof window !== "undefined") {
     window.checkServerSync = checkServerSync;
     window.applyFullServerSync = applyFullServerSync;
     window.connectServerSSE = connectServerSSE;
+    window.connectCloudSSE = connectCloudSSE;
+    window.pollCloudRecentHistory = pollCloudRecentHistory;
+    window.publishEventToCloud = publishEventToCloud;
+    window.applyCloudRoomCodeChange = applyCloudRoomCodeChange;
+    window.getCloudRoomCode = getCloudRoomCode;
     window.handleTabReactivation = handleTabReactivation;
     window.exportFullDatabaseSnapshot = exportFullDatabaseSnapshot;
     window.exportDatabaseSnapshot = exportFullDatabaseSnapshot;
