@@ -198,7 +198,6 @@ function connectCloudSSE() {
 
 async function publishEventToCloud(msg) {
     if (typeof fetch === "undefined") return;
-    if (typeof URL !== "function") return; // Bỏ qua nếu môi trường mock không có constructor URL
     const url = getCloudChannelUrl();
     if (!url) return;
     try {
@@ -219,14 +218,13 @@ async function publishEventToCloud(msg) {
             setCloudOnlineState(true);
         }
     } catch (e) {
-        console.warn("Lỗi gửi sự kiện lên đám mây:", e);
+        // Xử lý ngoại tuyến an toàn
     }
 }
 
 let hasPolledCloudHistory = false;
 async function pollCloudRecentHistory(force = false) {
     if (typeof fetch === "undefined") return;
-    if (typeof URL !== "function") return; // Bỏ qua nếu môi trường mock không có constructor URL
     const url = getCloudChannelUrl();
     if (!url) return;
 

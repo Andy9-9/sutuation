@@ -57,7 +57,7 @@ function createWindowInstance(windowLabel) {
         clearTimeout: (id) => clearTimeout(id),
         setInterval: (fn) => setInterval(fn, 10000),
         clearInterval: (id) => clearInterval(id),
-        Date, Math, JSON, Array, Object, String, Number, Boolean, Set, Map,
+        Date, Math, JSON, Array, Object, String, Number, Boolean, Set, Map, URL,
         sessionStorage: {
             getItem: (k) => storage['sess_' + k] || null,
             setItem: (k, v) => { storage['sess_' + k] = String(v); },
