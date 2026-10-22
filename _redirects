@@ -1,0 +1,11 @@
+# ====================================================================
+# NETLIFY REDIRECTS CONFIGURATION
+# ====================================================================
+# Đảm bảo điều hướng mượt mà trên tên miền miễn phí *.netlify.app
+# - Tự động mở trang chính khi vào domain gốc
+# - Tương thích cả /duan.html và /index.html
+# - Hỗ trợ Single Page Application (SPA) routing không bao giờ bị lỗi 404
+# ====================================================================
+
+/duan.html   /index.html   200
+/*           /index.html   200

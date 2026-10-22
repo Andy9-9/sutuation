@@ -1,0 +1,21 @@
+{
+  "name": "situation-nguvan",
+  "version": "2.0.0",
+  "description": "Nền tảng Lịch sử Sử Tuation - Đồng bộ dữ liệu máy chủ thời gian thực & Kịch bản sân khấu hóa học đường",
+  "main": "sync_server.js",
+  "scripts": {
+    "start": "node sync_server.js",
+    "test": "node tests/test_live_server_multi_device_sync_and_download.js",
+    "test:all": "for t in tests/*.js; do echo \"=== $t ===\" && node \"$t\"; done"
+  },
+  "keywords": [
+    "history",
+    "education",
+    "realtime-sync",
+    "classroom",
+    "theatre",
+    "vietnam"
+  ],
+  "author": "Situation Team",
+  "license": "MIT"
+}
