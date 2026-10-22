@@ -71,18 +71,28 @@ let serverNetworkInfo = null;
 // trên mọi thiết bị (Netlify / Internet) đều thấy ngay lập tức.
 // ==========================================
 
+// Bộ nhớ đệm chống trùng lặp sự kiện giữa các kênh (BroadcastChannel, Storage, Cloud SSE)
+const seenEventIds = new Set();
+function hasProcessedEvent(eventId) {
+    if (!eventId) return false;
+    if (seenEventIds.has(eventId)) return true;
+    seenEventIds.add(eventId);
+    if (seenEventIds.size > 300) {
+        const first = seenEventIds.values().next().value;
+        seenEventIds.delete(first);
+    }
+    return false;
+}
+
+let myLocalTabId = null;
 function getMyClientId() {
     if (typeof window === "undefined") return "node_client";
-    try {
-        let id = sessionStorage.getItem("situation_client_id");
-        if (!id) {
-            id = "c_" + Date.now().toString(36) + "_" + Math.random().toString(36).substr(2, 6);
-            sessionStorage.setItem("situation_client_id", id);
-        }
-        return id;
-    } catch (e) {
-        return "c_fallback_" + Math.random().toString(36).substr(2, 6);
+    if (!myLocalTabId) {
+        // Sinh ID định danh duy nhất cho từng Tab (KHÔNG lưu sessionStorage để tránh bị clone khi nhân đôi Tab)
+        myLocalTabId = "tab_" + Date.now().toString(36) + "_" + Math.random().toString(36).substr(2, 9);
+        window.__situation_tab_id = myLocalTabId;
     }
+    return myLocalTabId;
 }
 
 function getCloudRoomCode() {
@@ -163,8 +173,10 @@ function connectCloudSSE() {
                     } catch (err) {}
                 } else if (raw.message) {
                     try {
-                        msgObj = JSON.parse(raw.message);
+                        msgObj = typeof raw.message === 'string' ? JSON.parse(raw.message) : raw.message;
                     } catch (err) {}
+                } else if (raw.type) {
+                    msgObj = raw;
                 }
 
                 if (msgObj && msgObj.type) {
@@ -173,7 +185,9 @@ function connectCloudSSE() {
                     }
                     handleIncomingSyncEvent(msgObj, { fromCloud: true });
                 }
-            } catch (e) {}
+            } catch (e) {
+                console.warn("Lỗi nhận sự kiện Cloud:", e);
+            }
         };
 
         cloudEventSource.onerror = () => {
@@ -184,15 +198,20 @@ function connectCloudSSE() {
 
 async function publishEventToCloud(msg) {
     if (typeof fetch === "undefined") return;
+    if (typeof URL !== "function") return; // Bỏ qua nếu môi trường mock không có constructor URL
     const url = getCloudChannelUrl();
     if (!url) return;
     try {
+        if (!msg.id) {
+            msg.id = "evt_" + Date.now().toString(36) + "_" + Math.random().toString(36).substr(2, 7);
+        }
+        seenEventIds.add(msg.id); // Đánh dấu sự kiện do chính tab này phát ra
+
         const bodyStr = JSON.stringify(msg);
         const res = await fetch(url, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Title': 'Sử Tuation Realtime Event'
+                'Content-Type': 'application/json'
             },
             body: bodyStr
         });
@@ -200,13 +219,14 @@ async function publishEventToCloud(msg) {
             setCloudOnlineState(true);
         }
     } catch (e) {
-        // Ngoại tuyến không gây lỗi ứng dụng
+        console.warn("Lỗi gửi sự kiện lên đám mây:", e);
     }
 }
 
 let hasPolledCloudHistory = false;
 async function pollCloudRecentHistory(force = false) {
     if (typeof fetch === "undefined") return;
+    if (typeof URL !== "function") return; // Bỏ qua nếu môi trường mock không có constructor URL
     const url = getCloudChannelUrl();
     if (!url) return;
 
@@ -236,12 +256,14 @@ async function pollCloudRecentHistory(force = false) {
                     } catch (e) {}
                 } else if (raw.message) {
                     try {
-                        msgObj = JSON.parse(raw.message);
+                        msgObj = typeof raw.message === 'string' ? JSON.parse(raw.message) : raw.message;
                     } catch (e) {}
+                } else if (raw.type) {
+                    msgObj = raw;
                 }
 
                 if (msgObj && msgObj.type && msgObj.senderId !== myId) {
-                    commitDatabaseMutation(msgObj.type, msgObj.payload || {}, {
+                    handleIncomingSyncEvent(msgObj, {
                         fromBroadcast: true,
                         fromServer: true,
                         fromCloud: true,
@@ -638,7 +660,14 @@ function requestCloudStateSnapshot() {
         }
 
         function broadcastSyncEvent(type, payload) {
-            const msg = { type, payload, senderId: getMyClientId(), timestamp: Date.now() };
+            const msg = {
+                id: "evt_" + Date.now().toString(36) + "_" + Math.random().toString(36).substr(2, 7),
+                type,
+                payload,
+                senderId: getMyClientId(),
+                timestamp: Date.now()
+            };
+            seenEventIds.add(msg.id);
             if (syncChannel) {
                 try {
                     syncChannel.postMessage(msg);
@@ -655,11 +684,19 @@ function requestCloudStateSnapshot() {
             // Bỏ qua nếu là sự kiện do chính tab/thiết bị này phát ra
             if (data.senderId && data.senderId === getMyClientId()) return;
 
+            // Bỏ qua nếu sự kiện đã được xử lý qua kênh khác
+            if (data.id && hasProcessedEvent(data.id)) return;
+
             // Xử lý yêu cầu đồng bộ snapshot toàn phòng học
             if (data.type === "REQUEST_CLASSROOM_SNAPSHOT") {
-                const savedTeacherPosts = localStorage.getItem("situation_teacher_posts");
+                let posts = [];
+                try {
+                    const raw = localStorage.getItem("situation_teacher_posts");
+                    if (raw) posts = JSON.parse(raw);
+                } catch (e) {}
                 const deletedCodes = getDeletedCodes();
-                if ((savedTeacherPosts && savedTeacherPosts !== "[]") || deletedCodes.length > 0) {
+                // Chỉ phản hồi nếu thiết bị này thực sự có bài đăng hoặc mã đã xóa
+                if (posts.length > 0 || deletedCodes.length > 0) {
                     try {
                         publishEventToCloud({
                             type: "CLASSROOM_SNAPSHOT_RESPONSE",
@@ -667,7 +704,7 @@ function requestCloudStateSnapshot() {
                             senderId: getMyClientId(),
                             room: getCloudRoomCode(),
                             payload: {
-                                teacherPosts: JSON.parse(savedTeacherPosts || "[]"),
+                                teacherPosts: posts,
                                 teacherDocs: JSON.parse(localStorage.getItem("situation_teacher_docs") || "[]"),
                                 customDocs: JSON.parse(localStorage.getItem("situation_custom_docs") || "[]"),
                                 deletedCodes: deletedCodes,
@@ -862,10 +899,11 @@ function requestCloudStateSnapshot() {
         }
 
         let lastHeartbeatPollTime = 0;
+        let lastCloudPollTime = 0;
         function runPeriodicSyncHeartbeat() {
+            const now = Date.now();
             if (syncServerUrl) {
                 const isSseConnected = sseEventSource && sseEventSource.readyState === EventSource.OPEN;
-                const now = Date.now();
 
                 if (!isSseConnected) {
                     // Nếu SSE chưa kết nối được, cố gắng kết nối lại
@@ -892,6 +930,12 @@ function requestCloudStateSnapshot() {
                 if (!cloudEventSource || cloudEventSource.readyState === EventSource.CLOSED) {
                     connectCloudSSE();
                 }
+            }
+
+            // Fallback định kỳ thăm dò Cloud mỗi 5s phòng khi SSE bị ngắt hoặc firewall chặn
+            if (now - lastCloudPollTime >= 5000) {
+                lastCloudPollTime = now;
+                pollCloudRecentHistory();
             }
 
             // 2. Làm tươi các chỉ số audit
