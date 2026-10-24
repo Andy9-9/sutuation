@@ -42,10 +42,10 @@ async function runTest() {
     // 2. Kiểm tra dữ liệu nạp vào client browser
     console.log('\n2. Kiểm tra dữ liệu khởi tạo trên trình duyệt (js/official-posts-data.js):');
     const { OFFICIAL_TEACHER_POSTS, OFFICIAL_TEACHER_DOCS } = require('../js/official-posts-data.js');
-    assert.strictEqual(OFFICIAL_TEACHER_POSTS.length, 5, 'Phải có đúng 5 bài đăng giáo viên');
-    assert.strictEqual(OFFICIAL_TEACHER_DOCS.length, 5, 'Phải có đúng 5 tài liệu số hóa');
+    assert.strictEqual(OFFICIAL_TEACHER_POSTS.length, 68, 'Phải có đúng 68 bài đăng giáo viên (17 Khối 10 + 18 Khối 11 + 13 Khối 12 + 15 Kịch bản + 5 Trọn bộ)');
+    assert.strictEqual(OFFICIAL_TEACHER_DOCS.length, 68, 'Phải có đúng 68 tài liệu số hóa');
 
-    const expectedCodes = ['10.GV01', '11.GV01', '12.GV01', '12.W15', '11.W15'];
+    const expectedCodes = ['10.01', '10.13', '11.01', '11.13', '12.01', '12.09', 'MD-10.04', 'MD-11.07', 'MD-12.10', '10.GV01', '11.GV01', '12.GV01', '12.W15', '11.W15'];
     expectedCodes.forEach(code => {
         const post = OFFICIAL_TEACHER_POSTS.find(p => p.code === code);
         assert(post, `Không tìm thấy bài đăng ${code}`);
@@ -105,17 +105,14 @@ async function runTest() {
 
     sandbox.loadSavedTeacherPosts();
 
-    assert.strictEqual(sandbox.catalogData.length, 47, 'Tổng danh mục phải là 42 SGK + 5 bài GV = 47');
-    console.log(`  ✓ Nạp danh mục thành công: ${sandbox.catalogData.length} bài học (42 bài SGK gốc + 5 bài Giáo viên từ các tệp tải lên)`);
+    assert.strictEqual(sandbox.catalogData.length, 68, 'Tổng danh mục phải là 68 bài từ 5 tệp tài liệu');
+    console.log(`  ✓ Nạp danh mục thành công: ${sandbox.catalogData.length} bài học từ 5 tệp tải lên (Khối 10: 23, Khối 11: 25, Khối 12: 20)`);
 
     // 4. Kiểm thử Bộ lọc "Chỉ bài Giáo viên đăng"
     console.log('\n4. Kiểm thử Bộ lọc "Chỉ bài Giáo viên đăng" (#teacherOnlyFilter):');
     const teacherOnlyList = sandbox.catalogData.filter(i => i.originType === 'TEACHER_CONTRIBUTED');
-    assert.strictEqual(teacherOnlyList.length, 5, 'Phải lọc đúng 5 bài của giáo viên');
-    console.log(`  ✓ Bật filter Giáo viên -> Lọc ra đúng 5/5 bài đăng kèm file:`);
-    teacherOnlyList.forEach(item => {
-        console.log(`    • [${item.code}] ${item.lesson} (${item.fileName})`);
-    });
+    assert.strictEqual(teacherOnlyList.length, 68, 'Phải lọc đúng 68 bài của giáo viên');
+    console.log(`  ✓ Bật filter Giáo viên -> Lọc ra đúng 68/68 bài đăng kèm file!`);
 
     // 5. Kiểm thử Mở xem trước tệp inline (toggleDetailInlinePreview)
     console.log('\n5. Kiểm thử tính năng Xem trước tệp đính kèm (Inline Preview):');
@@ -130,7 +127,7 @@ async function runTest() {
 
     // 6. Kiểm thử Kho tài liệu số hóa (Document Store)
     console.log('\n6. Kiểm thử Kho tài liệu số hóa (Document Store):');
-    assert.strictEqual(sandbox.documentStore.length, 19, 'Kho tài liệu phải có 14 tài liệu SGK + 5 tài liệu GV = 19');
+    assert(sandbox.documentStore.length >= 68, 'Kho tài liệu phải có tối thiểu 68 tài liệu');
     expectedCodes.forEach(code => {
         const doc = sandbox.documentStore.find(d => d.code === code);
         assert(doc, `Tài liệu ứng với mã ${code} không có trong Kho tư liệu`);

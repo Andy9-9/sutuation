@@ -3366,17 +3366,19 @@ XÁC THỰC SỐ HÓA: TỔ CHUYÊN MÔN LỊCH SỬ THPT SITUATION (2026)
                     documentStore = JSON.parse(JSON.stringify(seedDocs));
                 }
 
-                // Lọc bỏ tất cả bài và tài liệu nằm trong danh sách đã xóa
+                // Lọc bỏ tất cả bài và tài liệu nằm trong danh sách đã xóa hoặc danh sách placeholder đã được thay thế
                 const deletedCodes = getDeletedCodes();
-                if (deletedCodes.length > 0) {
-                    catalogData = catalogData.filter(i => !deletedCodes.includes(i.code));
-                    documentStore = documentStore.filter(d => !deletedCodes.includes(d.code) && !deletedCodes.some(dc => d.id === `DOC-${dc.replace(/[^A-Z0-9]/gi, "")}`));
+                const replacedPlaceholders = (typeof window !== "undefined" && window.OFFICIAL_REPLACED_PLACEHOLDER_CODES) ? window.OFFICIAL_REPLACED_PLACEHOLDER_CODES : (typeof OFFICIAL_REPLACED_PLACEHOLDER_CODES !== "undefined" ? OFFICIAL_REPLACED_PLACEHOLDER_CODES : []);
+                const hiddenCodes = new Set([...deletedCodes, ...(Array.isArray(replacedPlaceholders) ? replacedPlaceholders : [])]);
+                if (hiddenCodes.size > 0) {
+                    catalogData = catalogData.filter(i => !hiddenCodes.has(i.code));
+                    documentStore = documentStore.filter(d => !hiddenCodes.has(d.code) && !Array.from(hiddenCodes).some(dc => d.id === `DOC-${dc.replace(/[^A-Z0-9]/gi, "")}`));
                 }
 
                 // Nạp các bài đăng giáo viên chính thức từ OFFICIAL_TEACHER_POSTS nếu có
                 const officialPosts = (typeof window !== "undefined" && window.OFFICIAL_TEACHER_POSTS) ? window.OFFICIAL_TEACHER_POSTS : (typeof OFFICIAL_TEACHER_POSTS !== "undefined" ? OFFICIAL_TEACHER_POSTS : []);
-                if (Array.isArray(officialPosts)) {
-                    officialPosts.forEach(post => {
+                if (Array.isArray(officialPosts) && officialPosts.length > 0) {
+                    officialPosts.slice().reverse().forEach(post => {
                         if (!deletedCodes.includes(post.code)) {
                             const idx = catalogData.findIndex(i => i.code === post.code);
                             if (idx >= 0) catalogData[idx] = post;

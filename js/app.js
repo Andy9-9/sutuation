@@ -1668,10 +1668,10 @@ function showSituationToast(optionsOrMsg, type = "info") {
                 const matchFormat = format === "ALL" || item.format === format;
                 const matchTopic = topic === "ALL" || item.topic === topic;
                 const matchTeacher = !teacherOnly || item.originType === "TEACHER_CONTRIBUTED";
-                const matchOfficial15 = !official15Only || ((typeof getOfficial15Script === "function" && getOfficial15Script(item.code) !== null) || Boolean(item.scriptData));
+                const matchOfficial15 = !official15Only || ((typeof getOfficial15Script === "function" && getOfficial15Script(item.code) !== null) || Boolean(item.scriptData) || Boolean(item.isOfficial15));
                 const searchable = `${item.code} ${item.lesson} ${item.scenario} ${item.format} ${item.focus} ${item.topic} ${item.author || ""} ${item.context || ""}`.toLowerCase();
                 const matchQuery = !query || searchable.includes(query);
-                return matchGrade && matchFormat && matchTopic && matchTeacher && matchQuery;
+                return matchGrade && matchFormat && matchTopic && matchTeacher && matchOfficial15 && matchQuery;
             });
 
             filteredCatalog.sort((a, b) => {
