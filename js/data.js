@@ -1447,6 +1447,11 @@ const GRADE_ORIENTATIONS = {
             try {
                 if (typeof localStorage === "undefined") return [];
                 const list = JSON.parse(localStorage.getItem("situation_deleted_codes") || "[]");
+                if (Array.isArray(list) && list.length >= 35) {
+                    // Tự động phục hồi bảo vệ CSDL khi danh sách xóa bất thường (ngăn chặn lỗi trắng trang 0 bài học)
+                    localStorage.removeItem("situation_deleted_codes");
+                    return [];
+                }
                 return Array.isArray(list) ? list : [];
             } catch (e) {
                 return [];

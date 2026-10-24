@@ -3147,6 +3147,10 @@ XÁC THỰC SỐ HÓA: TỔ CHUYÊN MÔN LỊCH SỬ THPT SITUATION (2026)
         function getDeletedCodes() {
             try {
                 const list = JSON.parse(localStorage.getItem("situation_deleted_codes") || "[]");
+                if (Array.isArray(list) && list.length >= 35) {
+                    localStorage.removeItem("situation_deleted_codes");
+                    return [];
+                }
                 return Array.isArray(list) ? list : [];
             } catch (e) {
                 return [];
@@ -3379,6 +3383,17 @@ XÁC THỰC SỐ HÓA: TỔ CHUYÊN MÔN LỊCH SỬ THPT SITUATION (2026)
                             else catalogData.unshift(post);
                         }
                     });
+                }
+
+                // Bảo vệ tối thượng: Nếu catalogData bị rỗng vì bất kỳ lý do gì, tự động nạp lại dữ liệu gốc
+                if (catalogData.length === 0 && seedCatalog && Array.isArray(seedCatalog)) {
+                    catalogData = JSON.parse(JSON.stringify(seedCatalog));
+                    if (Array.isArray(officialPosts)) {
+                        officialPosts.forEach(post => catalogData.unshift(post));
+                    }
+                    if (typeof localStorage !== "undefined") {
+                        localStorage.removeItem("situation_deleted_codes");
+                    }
                 }
 
                 const officialDocs = (typeof window !== "undefined" && window.OFFICIAL_TEACHER_DOCS) ? window.OFFICIAL_TEACHER_DOCS : (typeof OFFICIAL_TEACHER_DOCS !== "undefined" ? OFFICIAL_TEACHER_DOCS : []);

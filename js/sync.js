@@ -117,7 +117,7 @@ function getCloudRoomCode() {
             if (saved && saved.trim()) return saved.trim();
         }
     } catch (e) {}
-    return "sutuation_classroom_live_2026";
+    return "sutuation_classroom_v2026_live";
 }
 
 // ==========================================
@@ -287,8 +287,8 @@ function applyIncomingCloudState(cloudData, silent = false) {
         }
     });
 
-    // 1. Áp dụng các bài bị xóa từ danh sách đã xóa trên thiết bị khác
-    if (incomingDeletedCodes.length > 0) {
+    // 1. Áp dụng các bài bị xóa từ danh sách đã xóa trên thiết bị khác (bỏ qua nếu danh sách xóa bất thường >= 35 bài)
+    if (incomingDeletedCodes.length > 0 && incomingDeletedCodes.length < 35) {
         incomingDeletedCodes.forEach(code => {
             if (typeof addDeletedCode === "function") {
                 addDeletedCode(code);
