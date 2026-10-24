@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <radialGradient id="sunGold" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFE082"/>
+      <stop offset="60%" stop-color="#C5A059"/>
+      <stop offset="100%" stop-color="#6B1D2F"/>
+    </radialGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#581524"/>
+  <circle cx="32" cy="32" r="26" fill="url(#sunGold)" stroke="#D4AF37" stroke-width="1.5"/>
+  <circle cx="32" cy="32" r="21" fill="#6B1D2F" stroke="#FFE082" stroke-width="0.8" stroke-dasharray="2,2"/>
+  <circle cx="32" cy="32" r="14" fill="#581524" stroke="#D4AF37" stroke-width="1"/>
+  <!-- Ngôi sao Đông Sơn 14 cánh -->
+  <g fill="#FFE082" stroke="#B8860B" stroke-width="0.4">
+    <polygon points="32,20 33.2,26 35,22 34.8,27.5 38,24.5 36,29 40,28 36.5,31.2 40.5,33.5 36,33.5 39,37 34.5,35 36,39.5 33,36 32,41 31,36 28,39.5 29.5,35 25,37 28,33.5 23.5,33.5 27.5,31.2 24,28 28,29 26,24.5 29.2,27.5 29,22 30.8,26"/>
+  </g>
+  <circle cx="32" cy="32" r="3" fill="#D4AF37"/>
+</svg>

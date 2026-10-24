@@ -1,0 +1,143 @@
+{
+  "projectName": "Sử Tuation — Nền tảng Hoạt cảnh hóa Lịch sử THPT",
+  "version": "2.8.0",
+  "buildTimestamp": "2026-10-24T04:18:11.792Z",
+  "builtFor": [
+    "Netlify Drop (app.netlify.com/drop)",
+    "Netlify CLI",
+    "Vercel",
+    "Cloudflare Pages",
+    "GitHub Pages",
+    "Render Static Site",
+    "Apache / Nginx / cPanel"
+  ],
+  "totalFiles": 22,
+  "files": [
+    {
+      "file": "index.html",
+      "size": 318674,
+      "sizeKb": "311.2 KB",
+      "sha256": "032a3fd15e"
+    },
+    {
+      "file": "duan.html",
+      "size": 318674,
+      "sizeKb": "311.2 KB",
+      "sha256": "032a3fd15e"
+    },
+    {
+      "file": "404.html",
+      "size": 318674,
+      "sizeKb": "311.2 KB",
+      "sha256": "032a3fd15e"
+    },
+    {
+      "file": "_redirects",
+      "size": 591,
+      "sizeKb": "0.6 KB",
+      "sha256": "4d38115136"
+    },
+    {
+      "file": "_headers",
+      "size": 551,
+      "sizeKb": "0.5 KB",
+      "sha256": "e868e67734"
+    },
+    {
+      "file": "netlify.toml",
+      "size": 1015,
+      "sizeKb": "1.0 KB",
+      "sha256": "c41eff9e52"
+    },
+    {
+      "file": "render.yaml",
+      "size": 209,
+      "sizeKb": "0.2 KB",
+      "sha256": "ba638a2859"
+    },
+    {
+      "file": "situation_database.json",
+      "size": 3190593,
+      "sizeKb": "3115.8 KB",
+      "sha256": "1c33c493e8"
+    },
+    {
+      "file": "favicon.svg",
+      "size": 1068,
+      "sizeKb": "1.0 KB",
+      "sha256": "cc60600e58"
+    },
+    {
+      "file": "manifest.json",
+      "size": 511,
+      "sizeKb": "0.5 KB",
+      "sha256": "d6325a1ad7"
+    },
+    {
+      "file": ".nojekyll",
+      "size": 0,
+      "sizeKb": "0.0 KB",
+      "sha256": "e3b0c44298"
+    },
+    {
+      "file": "HUONG_DAN_UP_CODE.txt",
+      "size": 2651,
+      "sizeKb": "2.6 KB",
+      "sha256": "c75b947844"
+    },
+    {
+      "file": "js/official-posts-data.js",
+      "size": 3190566,
+      "sizeKb": "3115.8 KB",
+      "sha256": "4858c342b7"
+    },
+    {
+      "file": "js/scripts15-data.js",
+      "size": 211787,
+      "sizeKb": "206.8 KB",
+      "sha256": "24113b9405"
+    },
+    {
+      "file": "js/app.js",
+      "size": 191669,
+      "sizeKb": "187.2 KB",
+      "sha256": "72e802f6e0"
+    },
+    {
+      "file": "js/data.js",
+      "size": 142209,
+      "sizeKb": "138.9 KB",
+      "sha256": "9de473f2b6"
+    },
+    {
+      "file": "js/db.js",
+      "size": 31933,
+      "sizeKb": "31.2 KB",
+      "sha256": "48e8fe27d8"
+    },
+    {
+      "file": "js/paho-mqtt-min.js",
+      "size": 32236,
+      "sizeKb": "31.5 KB",
+      "sha256": "51d88704d4"
+    },
+    {
+      "file": "js/sync.js",
+      "size": 71000,
+      "sizeKb": "69.3 KB",
+      "sha256": "0b98e425b5"
+    },
+    {
+      "file": "js/teacher.js",
+      "size": 202350,
+      "sizeKb": "197.6 KB",
+      "sha256": "53b0c2e35b"
+    },
+    {
+      "file": "js/sql-studio.js",
+      "size": 18213,
+      "sizeKb": "17.8 KB",
+      "sha256": "cc3001bbe6"
+    }
+  ]
+}

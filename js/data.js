@@ -1196,6 +1196,26 @@ const GRADE_ORIENTATIONS = {
             }
         ];
         var catalogData = JSON.parse(JSON.stringify(INITIAL_CATALOG_DATA));
+        if (typeof localStorage !== "undefined") {
+            try {
+                const deletedRaw = localStorage.getItem("situation_deleted_codes");
+                const deletedList = deletedRaw ? JSON.parse(deletedRaw) : [];
+                if (Array.isArray(deletedList) && deletedList.length > 0) {
+                    catalogData = catalogData.filter(i => !deletedList.includes(i.code));
+                }
+                const postsRaw = localStorage.getItem("situation_teacher_posts");
+                if (postsRaw) {
+                    const posts = JSON.parse(postsRaw);
+                    if (Array.isArray(posts)) {
+                        posts.forEach(p => {
+                            if (!deletedList.includes(p.code) && !catalogData.some(i => i.code === p.code)) {
+                                catalogData.unshift(p);
+                            }
+                        });
+                    }
+                }
+            } catch (e) {}
+        }
 
         // 3. DỮ LIỆU KHO TÀI LIỆU (DOCUMENT REPOSITORY)
         const INITIAL_DOCUMENTS_DATA = [
@@ -1341,6 +1361,27 @@ const GRADE_ORIENTATIONS = {
             }
         ];
         var documentStore = JSON.parse(JSON.stringify(INITIAL_DOCUMENTS_DATA));
+        if (typeof localStorage !== "undefined") {
+            try {
+                const deletedRaw = localStorage.getItem("situation_deleted_codes");
+                const deletedList = deletedRaw ? JSON.parse(deletedRaw) : [];
+                if (Array.isArray(deletedList) && deletedList.length > 0) {
+                    documentStore = documentStore.filter(d => !deletedList.includes(d.code) && !deletedList.some(dc => d.id === `DOC-${dc.replace(/[^A-Z0-9]/gi, "")}`));
+                }
+                const docsRaw = localStorage.getItem("situation_teacher_docs");
+                if (docsRaw) {
+                    const docs = JSON.parse(docsRaw);
+                    if (Array.isArray(docs)) {
+                        docs.forEach(d => {
+                            const isDeleted = deletedList.includes(d.code) || deletedList.some(dc => d.id === `DOC-${dc.replace(/[^A-Z0-9]/gi, "")}`);
+                            if (!isDeleted && !documentStore.some(i => i.id === d.id)) {
+                                documentStore.unshift(d);
+                            }
+                        });
+                    }
+                }
+            } catch (e) {}
+        }
 
         // 4. STATE QUẢN LÝ GIAO DIỆN & BÀI NỘP HỌC SINH
         var isAdmin = false;
@@ -1448,6 +1489,71 @@ const GRADE_ORIENTATIONS = {
             } catch (e) { }
         }
 
+        // ==========================================
+        // HỆ THỐNG ICON VECTOR TỰ THIẾT Kế ĐỘC QUYỀN (Bespoke Đông Sơn & Hoàng Gia SVG Icons)
+        // ==========================================
+        const ST_CUSTOM_SVG_PATHS = {
+            "book": `<path d="M4 5.5C4 4.4 4.9 3.5 6 3.5H11C11.6 3.5 12 3.9 12 4.5V19.5C12 18.9 11.6 18.5 11 18.5H6C4.9 18.5 4 17.6 4 16.5V5.5Z" fill="currentColor" fill-opacity="0.16"/><path d="M20 5.5C20 4.4 19.1 3.5 18 3.5H13C12.4 3.5 12 3.9 12 4.5V19.5C12 18.9 12.4 18.5 13 18.5H18C19.1 18.5 20 17.6 20 16.5V5.5Z" fill="currentColor" fill-opacity="0.08"/><path d="M12 4.5C12 3.9 11.6 3.5 11 3.5H5.5C4.4 3.5 3.5 4.4 3.5 5.5V17C3.5 18.1 4.4 19 5.5 19H11C11.6 19 12 19.4 12 20C12 19.4 12.4 19 13 19H18.5C19.6 19 20.5 18.1 20.5 17V5.5C20.5 4.4 19.6 3.5 18.5 3.5H13C12.4 3.5 12 3.9 12 4.5ZM12 4.5V19.5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.5 8H9.5M6.5 11.5H9.5M14.5 8H17.5M14.5 11.5H17.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><polygon points="12,1.8 13.2,3 12,4.2 10.8,3" fill="currentColor"/>`,
+            "cap": `<polygon points="12,3 22,8 12,13 2,8" fill="currentColor" fill-opacity="0.18" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/><path d="M6 10.2V16C6 17.8 8.7 19.5 12 19.5C15.3 19.5 18 17.8 18 16V10.2" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 8.5V15.5M21 15.5L19.8 17.5M21 15.5L22.2 17.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="8" r="1.4" fill="currentColor"/>`,
+            "folder": `<path d="M3 6.5C3 5.4 3.9 4.5 5 4.5H9.2L11.4 7H19C20.1 7 21 7.9 21 9V17.5C21 18.6 20.1 19.5 19 19.5H5C3.9 19.5 3 18.6 3 17.5V6.5Z" fill="currentColor" fill-opacity="0.15" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/><path d="M3 10H21" stroke="currentColor" stroke-width="1.5"/><polygon points="12,12 14,14.5 12,17 10,14.5" fill="currentColor" fill-opacity="0.35" stroke="currentColor" stroke-width="1.4"/>`,
+            "mask": `<path d="M4 5.5C4 4.7 4.7 4 5.5 4H18.5C19.3 4 20 4.7 20 5.5V11.5C20 16.5 16.4 20.5 12 20.5C7.6 20.5 4 16.5 4 11.5V5.5Z" fill="currentColor" fill-opacity="0.15" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/><path d="M7.5 9.5C8.3 8.5 9.7 8.5 10.5 9.5M13.5 9.5C14.3 8.5 15.7 8.5 16.5 9.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M8.5 14.5C9.8 16.2 14.2 16.2 15.5 14.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><polygon points="12,5.8 13,7.2 12,8.6 11,7.2" fill="currentColor"/>`,
+            "tag": `<path d="M6 3.5H18C18.8 3.5 19.5 4.2 19.5 5V19.5L12 15.8L4.5 19.5V5C4.5 4.2 5.2 3.5 6 3.5Z" fill="currentColor" fill-opacity="0.16" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/><polygon points="12,6.5 14.2,9.2 12,11.9 9.8,9.2" fill="currentColor" fill-opacity="0.3" stroke="currentColor" stroke-width="1.4"/><circle cx="12" cy="9.2" r="1" fill="currentColor"/>`,
+            "scroll": `<path d="M6.5 4H18.5C19.6 4 20.5 4.9 20.5 6C20.5 7.1 19.6 8 18.5 8H17.5V17.5C17.5 19.2 16.2 20.5 14.5 20.5H5.5C4.1 20.5 3 19.4 3 18C3 16.6 4.1 15.5 5.5 15.5H6.5V4Z" fill="currentColor" fill-opacity="0.15" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/><path d="M6.5 4C5.1 4 4 5.1 4 6.5C4 7.9 5.1 9 6.5 9M9.5 8.5H14.5M9.5 12H14.5M9.5 15.5H13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>`,
+            "chart": `<rect x="4" y="12" width="3.5" height="7.5" rx="1" fill="currentColor" fill-opacity="0.2" stroke="currentColor" stroke-width="1.6"/><rect x="10.25" y="5" width="3.5" height="14.5" rx="1" fill="currentColor" fill-opacity="0.3" stroke="currentColor" stroke-width="1.6"/><rect x="16.5" y="8.5" width="3.5" height="11" rx="1" fill="currentColor" fill-opacity="0.2" stroke="currentColor" stroke-width="1.6"/><path d="M2.5 19.5H21.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><polygon points="12,2 13.2,3.5 12,5 10.8,3.5" fill="currentColor"/>`,
+            "search": `<circle cx="10.8" cy="10.8" r="6.8" fill="currentColor" fill-opacity="0.14" stroke="currentColor" stroke-width="1.85"/><path d="M15.8 15.8L21 21" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><polygon points="10.8,7.2 11.9,9.7 14.4,10.8 11.9,11.9 10.8,14.4 9.7,11.9 7.2,10.8 9.7,9.7" fill="currentColor" fill-opacity="0.45"/>`,
+            "temple": `<path d="M2.5 9.5C6 8.2 9 6.2 12 3.5C15 6.2 18 8.2 21.5 9.5H2.5Z" fill="currentColor" fill-opacity="0.22" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/><path d="M5.5 9.5V17.5M9.8 9.5V17.5M14.2 9.5V17.5M18.5 9.5V17.5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><path d="M3 17.5H21M2 20.5H22" stroke="currentColor" stroke-width="1.85" stroke-linecap="round"/><circle cx="12" cy="6.8" r="1.1" fill="currentColor"/>`,
+            "swords": `<path d="M4.5 19.5L18.5 5.5M15 4H19.5V8.5M4 15L9 20" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.5 19.5L5.5 5.5M9 4H4.5V8.5M20 15L15 20" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/><polygon points="12,8.5 14.8,12 12,15.5 9.2,12" fill="currentColor" fill-opacity="0.35" stroke="currentColor" stroke-width="1.5"/>`,
+            "dove": `<path d="M3.5 14.5C6.5 14.5 8.8 12.2 10.2 9.2L13.5 4.5C14.8 6.8 15.2 9.2 14.5 11.2L20.5 8.8C19.5 13.8 15.8 18.2 10.5 18.8C7.2 19.2 4.8 17.5 3.5 14.5Z" fill="currentColor" fill-opacity="0.18" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/><circle cx="16.5" cy="5.5" r="1.5" fill="currentColor"/><path d="M18.5 4L21 2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>`,
+            "quill": `<path d="M19.8 3.2C16.2 3.2 11.8 6.2 9.2 10.8L6.5 16.5L4 20L7.5 17.5L13.2 14.8C17.8 12.2 20.8 7.8 20.8 4.2C20.8 3.6 20.4 3.2 19.8 3.2Z" fill="currentColor" fill-opacity="0.18" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/><path d="M8 16L15.5 8.5M3.5 20.5H12.5" stroke="currentColor" stroke-width="1.65" stroke-linecap="round"/>`,
+            "download": `<path d="M12 3.5V15.5M12 15.5L7.5 11M12 15.5L16.5 11" stroke="currentColor" stroke-width="1.95" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 16.5V18.5C4 19.6 4.9 20.5 6 20.5H18C19.1 20.5 20 19.6 20 18.5V16.5" stroke="currentColor" stroke-width="1.85" stroke-linecap="round"/><polygon points="12,2.2 13.2,3.6 12,5 10.8,3.6" fill="currentColor"/>`,
+            "upload": `<path d="M12 16V4.5M12 4.5L7.5 9M12 4.5L16.5 9" stroke="currentColor" stroke-width="1.95" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 16.5V18.5C4 19.6 4.9 20.5 6 20.5H18C19.1 20.5 20 19.6 20 18.5V16.5" stroke="currentColor" stroke-width="1.85" stroke-linecap="round"/>`,
+            "rocket": `<path d="M12 2.5C15.5 5.5 17 9.5 16.5 14L12 17L7.5 14C7 9.5 8.5 5.5 12 2.5Z" fill="currentColor" fill-opacity="0.2" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/><path d="M7.5 11.5L4.5 14.5L7.5 16M16.5 11.5L19.5 14.5L16.5 16" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="9.5" r="1.8" fill="currentColor"/><path d="M10 19.5L12 22L14 19.5" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/>`,
+            "lock": `<rect x="4.5" y="10.5" width="15" height="10" rx="2.2" fill="currentColor" fill-opacity="0.16" stroke="currentColor" stroke-width="1.75"/><path d="M8 10.5V7.2C8 5 9.8 3.2 12 3.2C14.2 3.2 16 5 16 7.2V10.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="14.8" r="1.4" fill="currentColor"/><path d="M12 16.2V18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>`,
+            "unlock": `<rect x="4.5" y="10.5" width="15" height="10" rx="2.2" fill="currentColor" fill-opacity="0.16" stroke="currentColor" stroke-width="1.75"/><path d="M8 10.5V6.8C8 4.6 9.8 2.8 12 2.8C13.9 2.8 15.5 4.1 15.9 5.9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="14.8" r="1.4" fill="currentColor"/><path d="M12 16.2V18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>`,
+            "key": `<circle cx="8" cy="12" r="4.5" fill="currentColor" fill-opacity="0.18" stroke="currentColor" stroke-width="1.8"/><path d="M12.5 12H21M18 12V15.5M21 12V14.5" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"/><polygon points="8,10.2 9.8,12 8,13.8 6.2,12" fill="currentColor"/>`,
+            "database": `<ellipse cx="12" cy="6" rx="7.5" ry="3" fill="currentColor" fill-opacity="0.22" stroke="currentColor" stroke-width="1.75"/><path d="M4.5 6V12C4.5 13.7 7.9 15 12 15C16.1 15 19.5 13.7 19.5 12V6" stroke="currentColor" stroke-width="1.75"/><path d="M4.5 12V18C4.5 19.7 7.9 21 12 21C16.1 21 19.5 19.7 19.5 18V12" stroke="currentColor" stroke-width="1.75"/><circle cx="16" cy="10.5" r="0.9" fill="currentColor"/><circle cx="16" cy="16.5" r="0.9" fill="currentColor"/>`,
+            "radar": `<circle cx="12" cy="12" r="2.2" fill="currentColor"/><path d="M7.8 7.8C5.5 10.1 5.5 13.9 7.8 16.2M16.2 7.8C18.5 10.1 18.5 13.9 16.2 16.2" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><path d="M4.8 4.8C0.8 8.8 0.8 15.2 4.8 19.2M19.2 4.8C23.2 8.8 23.2 15.2 19.2 19.2" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>`,
+            "cloud": `<path d="M6.8 18.5H17.2C19.6 18.5 21.5 16.6 21.5 14.2C21.5 12 19.8 10.2 17.7 10C17 6.6 14 4 10.5 4C6.6 4 3.5 7.1 3.5 11C3.5 11.3 3.5 11.6 3.6 11.9C2.6 12.6 2 13.8 2 15.2C2 17 3.5 18.5 5.3 18.5H6.8Z" fill="currentColor" fill-opacity="0.16" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/><path d="M9.5 13.5L12 11L14.5 13.5M12 11V16.5" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/>`,
+            "globe": `<circle cx="12" cy="12" r="8.8" fill="currentColor" fill-opacity="0.14" stroke="currentColor" stroke-width="1.75"/><ellipse cx="12" cy="12" rx="4.2" ry="8.8" stroke="currentColor" stroke-width="1.5"/><path d="M3.6 9H20.4M3.6 15H20.4" stroke="currentColor" stroke-width="1.5"/>`,
+            "doc-word": `<path d="M5.5 3.5H14.5L19.5 8.5V19.5C19.5 20.3 18.8 21 18 21H5.5C4.7 21 4 20.3 4 19.5V5C4 4.2 4.7 3.5 5.5 3.5Z" fill="currentColor" fill-opacity="0.14" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/><path d="M14 3.5V8.5H19" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M7.5 12.5L9.2 17.5L11.8 13.5L14.4 17.5L16.1 12.5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>`,
+            "doc-pdf": `<path d="M5.5 3.5H14.5L19.5 8.5V19.5C19.5 20.3 18.8 21 18 21H5.5C4.7 21 4 20.3 4 19.5V5C4 4.2 4.7 3.5 5.5 3.5Z" fill="currentColor" fill-opacity="0.16" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/><path d="M14 3.5V8.5H19" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 17.2C9.5 14.5 11.5 11 11.8 9.8C12.1 11 13.5 14.8 15.8 16.5C13.8 16.8 10.2 16.8 8 17.2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>`,
+            "doc-txt": `<path d="M5.5 3.5H14.5L19.5 8.5V19.5C19.5 20.3 18.8 21 18 21H5.5C4.7 21 4 20.3 4 19.5V5C4 4.2 4.7 3.5 5.5 3.5Z" fill="currentColor" fill-opacity="0.12" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/><path d="M14 3.5V8.5H19M7.5 11.5H16M7.5 14.5H16M7.5 17.5H12.5" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/>`,
+            "doc-file": `<path d="M5.5 3.5H14.5L19.5 8.5V19.5C19.5 20.3 18.8 21 18 21H5.5C4.7 21 4 20.3 4 19.5V5C4 4.2 4.7 3.5 5.5 3.5Z" fill="currentColor" fill-opacity="0.14" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/><path d="M14 3.5V8.5H19" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><polygon points="11.8,11 14.3,14 11.8,17 9.3,14" fill="currentColor" fill-opacity="0.3" stroke="currentColor" stroke-width="1.4"/>`,
+            "clip": `<path d="M15.5 7.5L8.8 14.2C7.8 15.2 7.8 16.8 8.8 17.8C9.8 18.8 11.4 18.8 12.4 17.8L19.5 10.7C21.2 9 21.2 6.2 19.5 4.5C17.8 2.8 15 2.8 13.3 4.5L5.8 12C3.3 14.5 3.3 18.5 5.8 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`,
+            "eye": `<path d="M2.2 12C4.2 7.6 7.8 5 12 5C16.2 5 19.8 7.6 21.8 12C19.8 16.4 16.2 19 12 19C7.8 19 4.2 16.4 2.2 12Z" fill="currentColor" fill-opacity="0.14" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.2" fill="currentColor" fill-opacity="0.3" stroke="currentColor" stroke-width="1.65"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/>`,
+            "brain": `<path d="M12 4.5C9.5 3.5 6.5 5 6.2 7.8C4.4 8.5 3.8 11 4.8 12.8C4 14.8 5.2 17.2 7.5 17.8C8.2 19.5 10.5 20.2 12 19V4.5Z" fill="currentColor" fill-opacity="0.16" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 4.5C14.5 3.5 17.5 5 17.8 7.8C19.6 8.5 20.2 11 19.2 12.8C20 14.8 18.8 17.2 16.5 17.8C15.8 19.5 13.5 20.2 12 19V4.5Z" fill="currentColor" fill-opacity="0.16" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>`,
+            "bolt": `<polygon points="13.5,2.5 5,13.5 11.5,13.5 10.5,21.5 19,10.5 12.5,10.5" fill="currentColor" fill-opacity="0.22" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/>`,
+            "shield": `<path d="M12 3L4.5 6.2V11.8C4.5 16.5 7.7 20.2 12 21.5C16.3 20.2 19.5 16.5 19.5 11.8V6.2L12 3Z" fill="currentColor" fill-opacity="0.16" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/><polygon points="12,7.5 13.2,10.2 16,10.5 13.9,12.4 14.5,15.2 12,13.7 9.5,15.2 10.1,12.4 8,10.5 10.8,10.2" fill="currentColor"/>`,
+            "trash": `<path d="M4.5 6.5H19.5M9.5 6.5V4.5C9.5 3.9 9.9 3.5 10.5 3.5H13.5C14.1 3.5 14.5 3.9 14.5 4.5V6.5M6.5 6.5L7.3 19.2C7.4 20 8 20.5 8.8 20.5H15.2C16 20.5 16.6 20 16.7 19.2L17.5 6.5" fill="currentColor" fill-opacity="0.14" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 10.5V16.5M14 10.5V16.5" stroke="currentColor" stroke-width="1.65" stroke-linecap="round"/>`,
+            "refresh": `<path d="M20 11C19.5 6.8 16 3.5 11.8 3.5C8.5 3.5 5.6 5.4 4.3 8.2M4 4.5V8.5H8" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 13C4.5 17.2 8 20.5 12.2 20.5C15.5 20.5 18.4 18.6 19.7 15.8M20 19.5V15.5H16" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"/>`,
+            "undo": `<path d="M4 9.5H14.5C17.5 9.5 20 12 20 15C20 18 17.5 20.5 14.5 20.5H9M4 9.5L8.5 5M4 9.5L8.5 14" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>`,
+            "check": `<circle cx="12" cy="12" r="8.8" fill="currentColor" fill-opacity="0.16" stroke="currentColor" stroke-width="1.75"/><path d="M8.2 12.3L10.8 14.9L16 9.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`,
+            "close": `<path d="M6.5 6.5L17.5 17.5M17.5 6.5L6.5 17.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>`,
+            "star": `<polygon points="12,2.5 14.8,8.5 21.2,9.3 16.5,13.8 17.7,20.2 12,17 6.3,20.2 7.5,13.8 2.8,9.3 9.2,8.5" fill="currentColor" fill-opacity="0.25" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/>`,
+            "sparkle": `<path d="M12 2.5L14.2 9.8L21.5 12L14.2 14.2L12 21.5L9.8 14.2L2.5 12L9.8 9.8L12 2.5Z" fill="currentColor" fill-opacity="0.28" stroke="currentColor" stroke-width="1.65" stroke-linejoin="round"/><circle cx="18.5" cy="5.5" r="1.2" fill="currentColor"/>`,
+            "play": `<polygon points="7,4.5 19.5,12 7,19.5" fill="currentColor" fill-opacity="0.22" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>`,
+            "inbox": `<path d="M4 13.5L6.2 5.2C6.4 4.5 7 4 7.8 4H16.2C17 4 17.6 4.5 17.8 5.2L20 13.5V18.5C20 19.6 19.1 20.5 18 20.5H6C4.9 20.5 4 19.6 4 18.5V13.5Z" fill="currentColor" fill-opacity="0.15" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/><path d="M4 13.5H8.5C9.2 15.2 10.5 16.2 12 16.2C13.5 16.2 14.8 15.2 15.5 13.5H20" stroke="currentColor" stroke-width="1.7"/>`,
+            "crown": `<path d="M3.5 17.5L5.2 7.5L9.8 11.8L12 5.5L14.2 11.8L18.8 7.5L20.5 17.5H3.5Z" fill="currentColor" fill-opacity="0.24" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/><path d="M4 20.2H20" stroke="currentColor" stroke-width="1.85" stroke-linecap="round"/>`,
+            "teacher": `<circle cx="12" cy="7.2" r="3.4" fill="currentColor" fill-opacity="0.2" stroke="currentColor" stroke-width="1.75"/><path d="M5 19.8C5 16.2 8.1 13.5 12 13.5C15.9 13.5 19 16.2 19 19.8" fill="currentColor" fill-opacity="0.14" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><polygon points="12,2.2 15.5,4 12,5.8 8.5,4" fill="currentColor"/>`,
+            "clock": `<circle cx="12" cy="12" r="8.8" fill="currentColor" fill-opacity="0.14" stroke="currentColor" stroke-width="1.75"/><path d="M12 7.2V12.2L15.4 14.4" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"/>`,
+            "copy": `<rect x="8.5" y="8.5" width="11" height="12" rx="1.8" fill="currentColor" fill-opacity="0.16" stroke="currentColor" stroke-width="1.75"/><path d="M15.5 8.5V5.5C15.5 4.4 14.6 3.5 13.5 3.5H5.5C4.4 3.5 3.5 4.4 3.5 5.5V14.5C3.5 15.6 4.4 16.5 5.5 16.5H8.5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>`,
+            "window": `<rect x="4" y="4" width="16" height="16" rx="2.2" fill="currentColor" fill-opacity="0.12" stroke="currentColor" stroke-width="1.75"/><path d="M10.5 13.5L16.5 7.5M12.5 7.5H16.5V11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`,
+            "bulb": `<path d="M9 17.5H15M10 20.5H14M12 3.5C8.4 3.5 5.5 6.4 5.5 10C5.5 12.4 6.8 14.4 8.7 15.5L9.2 17.5H14.8L15.3 15.5C17.2 14.4 18.5 12.4 18.5 10C18.5 6.4 15.6 3.5 12 3.5Z" fill="currentColor" fill-opacity="0.18" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>`,
+            "print": `<path d="M7 8V3.8H17V8M7 17H4.8C3.8 17 3 16.2 3 15.2V10C3 9 3.8 8.2 4.8 8.2H19.2C20.2 8.2 21 9 21 10V15.2C21 16.2 20.2 17 19.2 17H17" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/><rect x="7" y="13.5" width="10" height="7" rx="1" fill="currentColor" fill-opacity="0.18" stroke="currentColor" stroke-width="1.75"/>`,
+            "warning": `<polygon points="12,3 21.5,19.5 2.5,19.5" fill="currentColor" fill-opacity="0.18" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/><path d="M12 9V13.8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16.8" r="1.1" fill="currentColor"/>`,
+            "info": `<circle cx="12" cy="12" r="8.8" fill="currentColor" fill-opacity="0.15" stroke="currentColor" stroke-width="1.75"/><path d="M12 11V16.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="12" cy="7.8" r="1.1" fill="currentColor"/>`,
+            "arrow-up": `<path d="M12 19.5V4.5M12 4.5L6 10.5M12 4.5L18 10.5" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>`,
+            "arrow-right": `<path d="M4.5 12H19.5M19.5 12L13.5 6M19.5 12L13.5 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`,
+            "arrow-left": `<path d="M19.5 12H4.5M4.5 12L10.5 6M4.5 12L10.5 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`,
+            "plus": `<path d="M12 4.5V19.5M4.5 12H19.5" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/>`
+        };
+
+        function stIcon(name, size = 18, extraClass = "") {
+            const path = ST_CUSTOM_SVG_PATHS[name] || ST_CUSTOM_SVG_PATHS["sparkle"];
+            const cls = extraClass ? `st-icon st-icon-${name} ${extraClass}` : `st-icon st-icon-${name}`;
+            return `<svg class="${cls}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${path}</svg>`;
+        }
+
 // Khởi tạo và đồng bộ biến toàn cục trên window
 if (typeof window !== "undefined") {
     window.GRADE_ORIENTATIONS = GRADE_ORIENTATIONS;
@@ -1471,4 +1577,6 @@ if (typeof window !== "undefined") {
     window.addDeletedCode = addDeletedCode;
     window.addDeletedCodes = addDeletedCodes;
     window.removeDeletedCode = removeDeletedCode;
+    window.ST_CUSTOM_SVG_PATHS = ST_CUSTOM_SVG_PATHS;
+    window.stIcon = stIcon;
 }

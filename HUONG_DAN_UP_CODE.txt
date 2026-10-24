@@ -1,0 +1,39 @@
+================================================================================
+   SỬ TUATION — HƯỚNG DẪN ĐẨY CODE LÊN NETLIFY & HOSTING MIỄN PHÍ
+================================================================================
+
+Tệp nén này đã được tối ưu hóa toàn diện 100%, sẵn sàng triển khai ngay lập tức
+lên Netlify Drop hoặc bất kỳ nền tảng Web Hosting tĩnh nào (Vercel, Cloudflare,
+GitHub Pages, Render, cPanel,...).
+
+--------------------------------------------------------------------------------
+CÁCH 1: KÉO THẢ VÀO NETLIFY DROP (NHANH NHẤT - 10 GIÂY)
+--------------------------------------------------------------------------------
+1. Truy cập: https://app.netlify.com/drop (đăng nhập hoặc đăng ký tài khoản miễn phí)
+2. Kéo thả trực tiếp tệp "netlify_deploy.zip" vào khung kéo thả của trình duyệt.
+3. Chờ 5 - 10 giây: Netlify sẽ cấp ngay cho bạn một tên miền miễn phí dạng:
+   👉 https://su-tuation-xxxxx.netlify.app
+
+4. Đổi tên miền phụ cho đẹp (tùy chọn):
+   - Vào Site settings -> Change site name
+   - Đặt tên theo ý muốn, ví dụ: "sutuation-thpt" -> https://sutuation-thpt.netlify.app
+
+--------------------------------------------------------------------------------
+CÁCH 2: GIẢI NÉN VÀ ĐẨY BẰNG THƯ MỤC
+--------------------------------------------------------------------------------
+- Giải nén toàn bộ tệp zip này ra một thư mục.
+- Kéo thả cả thư mục đó vào https://app.netlify.com/drop
+
+--------------------------------------------------------------------------------
+ĐẶC ĐIỂM KỸ THUẬT ĐÃ TỐI ƯU TRONG BẢN BUILD NÀY:
+--------------------------------------------------------------------------------
+✓ index.html & duan.html: Đồng bộ hoàn toàn, hỗ trợ Reader Mode, Modal kiểm kê số liệu.
+✓ _redirects & _headers: Ngăn chặn lỗi 404 khi tải lại trang, kích hoạt nén gzip/brotli.
+✓ favicon.svg & manifest.json: Biểu tượng Trống đồng Đông Sơn 14 cánh trên tab trình duyệt và PWA.
+✓ Cache Busting (?v=2.6): Khách truy cập luôn thấy code mới nhất, không bị lưu cache cũ.
+✓ 42 bài học chuẩn SGK GDPT 2018 (Khối 10, 11, 12) + 88 nhân vật + 14 hồ sơ tư liệu.
+✓ Mã giáo viên: SU2026 (dùng để đăng bài và quản lý bài học).
+✓ Tương thích 100% với backend realtime khi thiết lập qua biến "?server=...".
+
+Chúc bạn triển khai thành công!
+================================================================================

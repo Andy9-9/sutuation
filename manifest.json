@@ -1,0 +1,16 @@
+{
+  "name": "Sử Tuation — Nền tảng Hoạt cảnh hóa Lịch sử THPT",
+  "short_name": "Sử Tuation",
+  "description": "Nền tảng tra cứu 42 bài học chuẩn SGK GDPT 2018, kịch bản sân khấu hóa học đường và hồ sơ tư liệu số hóa.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FBF9F5",
+  "theme_color": "#581524",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "64x64 128x128 256x256",
+      "type": "image/svg+xml"
+    }
+  ]
+}

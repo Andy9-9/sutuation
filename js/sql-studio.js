@@ -49,10 +49,10 @@ const SQLStudio = {
     
     statEl.innerHTML = `
       <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
-        <div>📊 Tổng bài học: <strong>${catCount}</strong></div>
-        <div>👨‍🏫 Bài giáo viên đăng: <strong>${teacherCount}</strong></div>
-        <div>📄 Hồ sơ tư liệu: <strong>${docCount}</strong></div>
-        <div>🗄️ Động cơ lưu trữ: <strong>IndexedDB (SituationDB_v2) + ANSI SQL</strong></div>
+        <div>${stIcon('chart', 15)} Tổng bài học: <strong>${catCount}</strong></div>
+        <div>${stIcon('teacher', 15)} Bài giáo viên đăng: <strong>${teacherCount}</strong></div>
+        <div>${stIcon('doc-file', 15)} Hồ sơ tư liệu: <strong>${docCount}</strong></div>
+        <div>${stIcon('database', 15)} Động cơ lưu trữ: <strong>IndexedDB (SituationDB_v2) + ANSI SQL</strong></div>
       </div>
     `;
   },
@@ -90,14 +90,14 @@ const SQLStudio = {
       return;
     }
 
-    resultBox.innerHTML = `<div style="padding:1rem; color:var(--burgundy);">⏳ Đang thực thi truy vấn SQL trên SituationDB...</div>`;
+    resultBox.innerHTML = `<div style="padding:1rem; color:var(--burgundy);">${stIcon('clock', 15)} Đang thực thi truy vấn SQL trên SituationDB...</div>`;
 
     const res = await window.SituationDB.querySQL(sql);
 
     if (res.error) {
       resultBox.innerHTML = `
         <div style="background:#FFEBEE; border:1px solid #EF5350; color:#C62828; padding:1rem; border-radius:3px;">
-          <strong>❌ Lỗi thực thi SQL:</strong> ${this.escapeHtml(res.error)}
+          <strong>${stIcon('close', 15)} Lỗi thực thi SQL:</strong> ${this.escapeHtml(res.error)}
           <div style="font-size:0.8rem; margin-top:0.4rem; color:var(--ink-muted);">Thời gian xử lý: ${res.timeMs} ms</div>
         </div>
       `;
@@ -117,8 +117,8 @@ const SQLStudio = {
 
     resultBox.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem; font-size:0.82rem; color:var(--ink-muted);">
-        <span>✓ Trả về <strong>${res.rowCount}</strong> dòng kết quả</span>
-        <span>⚡ Thời gian thực thi: <strong>${res.timeMs} ms</strong></span>
+        <span>${stIcon('check', 14)} Trả về <strong>${res.rowCount}</strong> dòng kết quả</span>
+        <span>${stIcon('bolt', 14)} Thời gian thực thi: <strong>${res.timeMs} ms</strong></span>
       </div>
       <div style="overflow-x:auto; max-height:360px; overflow-y:auto; border:1px solid var(--border); background:#fff;">
         <table style="width:100%; border-collapse:collapse;" class="catalog-table">
@@ -140,7 +140,7 @@ const SQLStudio = {
         <!-- Bảng 1: catalog_items -->
         <div class="detail-box">
           <div style="display:flex; justify-content:space-between; align-items:center;">
-            <strong style="color:var(--bordeaux); font-size:1.05rem;">📋 catalog_items</strong>
+            <strong style="color:var(--bordeaux); font-size:1.05rem;">${stIcon('scroll', 16)} catalog_items</strong>
             <span class="code-badge">Khóa chính: code</span>
           </div>
           <p style="font-size:0.82rem; color:var(--ink-muted); margin:0.35rem 0 0.65rem;">Lưu trữ các bài học Lịch sử và gợi ý hoạt cảnh hóa chuẩn 5 trường GDPT 2018.</p>
@@ -161,7 +161,7 @@ const SQLStudio = {
         <!-- Bảng 2: characters -->
         <div class="detail-box">
           <div style="display:flex; justify-content:space-between; align-items:center;">
-            <strong style="color:var(--bordeaux); font-size:1.05rem;">🎭 characters</strong>
+            <strong style="color:var(--bordeaux); font-size:1.05rem;">${stIcon('mask', 16)} characters</strong>
             <span class="code-badge">Khóa ngoại: item_code</span>
           </div>
           <p style="font-size:0.82rem; color:var(--ink-muted); margin:0.35rem 0 0.65rem;">Phân vai nhân vật lịch sử và vai đại diện sáng tạo cho từng hoạt cảnh.</p>
@@ -177,7 +177,7 @@ const SQLStudio = {
         <!-- Bảng 3: documents -->
         <div class="detail-box">
           <div style="display:flex; justify-content:space-between; align-items:center;">
-            <strong style="color:var(--bordeaux); font-size:1.05rem;">📄 documents</strong>
+            <strong style="color:var(--bordeaux); font-size:1.05rem;">${stIcon('doc-file', 16)} documents</strong>
             <span class="code-badge">Khóa chính: id</span>
           </div>
           <p style="font-size:0.82rem; color:var(--ink-muted); margin:0.35rem 0 0.65rem;">Kho văn bản tư liệu lịch sử, hồ sơ trích dẫn phục vụ đối chiếu RAG.</p>
@@ -195,7 +195,7 @@ const SQLStudio = {
         <!-- Bảng 4: chat_messages -->
         <div class="detail-box">
           <div style="display:flex; justify-content:space-between; align-items:center;">
-            <strong style="color:var(--bordeaux); font-size:1.05rem;">💬 chat_messages</strong>
+            <strong style="color:var(--bordeaux); font-size:1.05rem;">${stIcon('brain', 16)} chat_messages</strong>
             <span class="code-badge">Khóa ngoại: session_id</span>
           </div>
           <p style="font-size:0.82rem; color:var(--ink-muted); margin:0.35rem 0 0.65rem;">Lưu trữ nhật ký hội thoại giữa người dùng và Trợ lý AI Situation.</p>
@@ -212,7 +212,7 @@ const SQLStudio = {
         <!-- Bảng 5: uploaded_word_files -->
         <div class="detail-box" style="border-left: 4px solid #2E7D32;">
           <div style="display:flex; justify-content:space-between; align-items:center;">
-            <strong style="color:#2E7D32; font-size:1.05rem;">📘 uploaded_word_files</strong>
+            <strong style="color:#2E7D32; font-size:1.05rem;">${stIcon('doc-word', 16)} uploaded_word_files</strong>
             <span class="code-badge" style="background:#E8F5E9; color:#1B5E20; border-color:#81C784;">Khóa chính: code</span>
           </div>
           <p style="font-size:0.82rem; color:var(--ink-muted); margin:0.35rem 0 0.65rem;">Lưu trữ tệp kịch bản Word (.docx) do giáo viên tải lên, xác thực bằng 3 cấp mã khóa bảo mật.</p>
@@ -316,18 +316,24 @@ const SQLStudio = {
     if (!confirm("⚠️ Bạn có chắc chắn muốn khôi phục Cơ sở Dữ liệu về trạng thái xuất xưởng mặc định? Toàn bộ bài đăng và tư liệu bổ sung sẽ được cài đặt lại.")) return;
     
     if (window.SituationDB) {
-      await window.SituationDB.seedInitialData();
-      await window.SituationDB.syncFromStorage();
       try {
+        localStorage.removeItem("situation_deleted_codes");
         localStorage.removeItem("situation_teacher_posts");
         localStorage.removeItem("situation_teacher_docs");
+        localStorage.removeItem("situation_custom_docs");
       } catch(e) {}
+      await window.SituationDB.seedInitialData();
+      await window.SituationDB.syncFromStorage();
 
-      if (typeof populateFilterDropdowns === "function") populateFilterDropdowns();
-      if (typeof updateHomeCounters === "function") updateHomeCounters();
-      if (typeof applyCatalogFilters === "function") applyCatalogFilters();
-      if (typeof renderDocuments === "function") renderDocuments();
-      if (typeof updateRagCounters === "function") updateRagCounters();
+      if (typeof commitDatabaseMutation === "function") {
+        commitDatabaseMutation("RESTORE_DEFAULT_DATA", {});
+      } else {
+        if (typeof populateFilterDropdowns === "function") populateFilterDropdowns();
+        if (typeof updateHomeCounters === "function") updateHomeCounters();
+        if (typeof applyCatalogFilters === "function") applyCatalogFilters();
+        if (typeof renderDocuments === "function") renderDocuments();
+        if (typeof updateRagCounters === "function") updateRagCounters();
+      }
       this.refreshStats();
       alert("✅ Đã khôi phục cơ sở dữ liệu về mặc định thành công!");
     }

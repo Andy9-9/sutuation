@@ -288,6 +288,32 @@ class SituationDBEngine {
     }
   }
 
+  async resetToDefaultSeed() {
+    this.catalog = [...getSeedCatalog()];
+    this.documents = [...getSeedDocuments()];
+    if (typeof window !== "undefined") {
+      window.catalogData = this.catalog;
+      window.documentStore = this.documents;
+    }
+    if (this.db) {
+      try {
+        const tx = this.db.transaction(["catalog_items", "documents"], "readwrite");
+        tx.objectStore("catalog_items").clear();
+        tx.objectStore("documents").clear();
+        const catStore = tx.objectStore("catalog_items");
+        const docStore = tx.objectStore("documents");
+        for (const item of getSeedCatalog()) {
+          catStore.put(item);
+        }
+        for (const doc of getSeedDocuments()) {
+          docStore.put(doc);
+        }
+      } catch (e) {
+        console.warn("Lỗi reset IndexedDB:", e);
+      }
+    }
+  }
+
   async saveChatMessage(msg) {
     this.chatMessages.push(msg);
     if (this.db) {

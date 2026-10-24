@@ -169,14 +169,18 @@ console.log('  -> Đã dọn sạch situation_deleted_codes trong localStorage.'
 console.log('  ✓ [PASS] Tính năng Khôi phục CSDL mặc định hoạt động chuẩn xác.\n');
 
 // 9. Kiểm tra Trống đồng Đông Sơn và Chim Lạc trong DOM
-console.log('Test 9: Kiểm tra Trống đồng Đông Sơn & Chim Lạc chuyển động');
+console.log('Test 9: Kiểm tra Trống đồng Đông Sơn nền toàn trang & Chim Lạc chuyển động');
 if (!html.includes('id=\"dongsonDrumSvg\"')) throw new Error('Thiếu id dongsonDrumSvg');
+if (!html.includes('id=\"globalDongSonBgStage\"')) throw new Error('Thiếu id globalDongSonBgStage làm nền toàn trang');
+if (!html.includes('id=\"globalDongSonBgSvg\"')) throw new Error('Thiếu id globalDongSonBgSvg làm nền toàn trang');
+if (!html.includes('spinClockwiseFullBg')) throw new Error('Thiếu hiệu ứng spinClockwiseFullBg quay theo chiều kim đồng hồ');
+if (html.includes('rotate(-360deg)')) throw new Error('Trống đồng phải quay theo chiều kim đồng hồ (360deg), không được quay ngược (-360deg)');
 if (!html.includes('id=\"chimLacRing\"')) throw new Error('Thiếu id chimLacRing');
 if (!html.includes('soaring-chim-lac')) throw new Error('Thiếu class soaring-chim-lac');
 if (!html.includes('toggleDrumRotation()')) throw new Error('Thiếu toggleDrumRotation');
-console.log('  -> Mặt Trống đồng Đông Sơn (Ngôi sao 14 cánh, Vòng Chim Lạc quay ngược chiều kim đồng hồ, Hào quang vầng dương).');
+console.log('  -> Nền Trống đồng Đông Sơn toàn trang web & Mặt Trống trung tâm quay thuận chiều kim đồng hồ (0deg -> 360deg).');
 console.log('  -> Bầy Chim Lạc bay lượn tự do trên bầu trời Hero Banner.');
-console.log('  ✓ [PASS] Giao diện Trống đồng và Chim Lạc chuyển động chuẩn xác.\n');
+console.log('  ✓ [PASS] Giao diện nền Trống đồng toàn trang và Chim Lạc chuyển động chuẩn xác.\n');
 
 // 10. Kiểm tra Chatbot AI trạng thái khóa bảo trì
 console.log('Test 10: Kiểm tra Chatbot AI trạng thái Khóa phát triển');

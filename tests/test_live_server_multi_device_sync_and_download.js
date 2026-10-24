@@ -225,7 +225,7 @@ async function runTestSuite() {
     // Bước 2: Khởi tạo Phiên A (Giáo viên trên máy A) và Phiên B (Học sinh trên máy B qua LAN IP)
     console.log('\n2. Khởi tạo 2 phiên làm việc độc lập (GV máy A ↔ HS máy B qua LAN IP):');
     const teacherSession = createClientSession('Thiết bị Giáo viên (Bục giảng)', 'http://localhost:8080');
-    const studentSession = createClientSession('Thiết bị Học sinh (Phòng học)', 'http://10.65.168.172:8080');
+    const studentSession = createClientSession('Thiết bị Học sinh (Phòng học)', netRes.data.primaryLanUrl);
 
     teacherSession.ctx.initSituationRealtimeSync();
     studentSession.ctx.initSituationRealtimeSync();

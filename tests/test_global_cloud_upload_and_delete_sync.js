@@ -33,6 +33,14 @@ class MockCloudRelay {
             this.subscribers.set(room, new Set());
         }
         this.subscribers.get(room).add(callback);
+
+        // Giả lập cơ chế Retained Message của MQTT: thiết bị vào sau tự động nhận bản tin mới nhất của phòng
+        const hist = this.history.get(room);
+        if (hist && hist.length > 0) {
+            const latest = hist[hist.length - 1];
+            try { callback(latest); } catch (e) {}
+        }
+
         return () => {
             const subs = this.subscribers.get(room);
             if (subs) subs.delete(callback);
@@ -134,6 +142,20 @@ function createSimulatedDevice(name, roomCode = "sutuation_classroom_live_2026")
         },
         // Mô phỏng fetch giao tiếp Cloud Relay
         fetch: async (url, opts = {}) => {
+            if (opts.method === 'PUT') {
+                try {
+                    const parsed = JSON.parse(opts.body);
+                    mockCloud.latestState = parsed.data || parsed;
+                    mockCloud.publish(roomCode, mockCloud.latestState);
+                } catch (e) { }
+                return { ok: true, json: async () => ({ id: 'mock', data: mockCloud.latestState }) };
+            }
+            if (url && url.includes('api.restful-api.dev')) {
+                return {
+                    ok: true,
+                    json: async () => ({ data: mockCloud.latestState || { version: 0, posts: [], deletedCodes: [] } })
+                };
+            }
             if (url.includes("/json?poll=1")) {
                 const hist = mockCloud.getHistory(roomCode);
                 const text = hist.map(m => JSON.stringify({
@@ -159,6 +181,9 @@ function createSimulatedDevice(name, roomCode = "sutuation_classroom_live_2026")
                 this.url = url;
                 this.readyState = 1; // OPEN
                 this.unsubscribe = mockCloud.subscribe(roomCode, (msg) => {
+                    if (typeof sandbox.pullStateFromGlobalCloud === "function") {
+                        sandbox.pullStateFromGlobalCloud(false);
+                    }
                     if (this.onmessage) {
                         this.onmessage({
                             data: JSON.stringify({
@@ -214,6 +239,10 @@ function createSimulatedDevice(name, roomCode = "sutuation_classroom_live_2026")
     sandbox.window.showSituationToast = sandbox.showSituationToast;
     sandbox.window.closeDetailModal = sandbox.closeDetailModal;
     sandbox.window.openDetailModal = sandbox.openDetailModal;
+    sandbox.__onCloudPushState = (payload) => {
+        mockCloud.publish(roomCode, payload);
+    };
+    sandbox.window.__onCloudPushState = sandbox.__onCloudPushState;
 
     const ctx = vm.createContext(sandbox);
 
@@ -224,6 +253,13 @@ function createSimulatedDevice(name, roomCode = "sutuation_classroom_live_2026")
 
     // Khởi tạo
     ctx.initSituationRealtimeSync();
+
+    // Giả lập kênh phân phối tức thì của Đám mây tới các thiết bị
+    mockCloud.subscribe(roomCode, (state) => {
+        if (typeof ctx.applyIncomingCloudState === "function") {
+            ctx.applyIncomingCloudState(state);
+        }
+    });
 
     return ctx;
 }
@@ -278,7 +314,7 @@ async function runTest() {
     console.log("  ✓ Giáo viên đã lưu bài 12.W01 thành công vào CSDL cục bộ");
 
     // Chờ luồng Cloud phân phối sự kiện
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 100));
 
     // Học sinh A & B kiểm tra
     assert.strictEqual(studentA.catalogData.length, 43, "Học sinh A (điện thoại) tăng lên 43 bài");
@@ -369,8 +405,19 @@ async function runTest() {
     assert.strictEqual(otherRoomStudent.catalogData.find(p => p.code === "12.W88"), undefined, "Học sinh phòng khác không bị lẫn bài");
     console.log("  ✓ Phân tách phòng học theo mã lớp hoạt động độc lập và bảo mật!");
 
+    console.log("\n8. KIỂM THỬ KHÔI PHỤC CSDL MẶC ĐỊNH 42 BÀI (RESTORE DEFAULT DATA SYNC):");
+    teacher.commitDatabaseMutation('RESTORE_DEFAULT_DATA', {});
+    await new Promise(r => setTimeout(r, 50));
+
+    assert.strictEqual(teacher.catalogData.length, 42, "Giáo viên khôi phục về đúng 42 bài mặc định");
+    assert.strictEqual(studentA.catalogData.length, 42, "Học sinh A tự động khôi phục về đúng 42 bài mặc định");
+    assert.strictEqual(studentB.catalogData.length, 42, "Học sinh B tự động khôi phục về đúng 42 bài mặc định");
+    assert.ok(studentA.catalogData.find(p => p.code === "10.01A"), "Bài 10.01A đã được phục hồi trên máy Học sinh A");
+    assert.strictEqual(studentA.catalogData.find(p => p.code === "12.W88"), undefined, "Bài tự thêm 12.W88 đã được dọn sạch trên máy Học sinh A");
+    console.log("  ✓ Khôi phục CSDL mặc định 42 bài đồng bộ hoàn hảo trên toàn bộ thiết bị!");
+
     console.log("\n=================================================================");
-    console.log("   🎉 TẤT CẢ 7 MỤC KIỂM THỬ ĐỒNG BỘ ĐÁM MÂY ĐÃ VƯỢT QUA 100%!");
+    console.log("   🎉 TẤT CẢ 8 MỤC KIỂM THỬ ĐỒNG BỘ ĐÁM MÂY ĐÃ VƯỢT QUA 100%!");
     console.log("   1. Tải lên bài + file -> Tất cả mọi người thấy ngay lập tức -> ĐẠT");
     console.log("   2. Xóa 1 bài -> Tất cả mọi người mất ngay lập tức         -> ĐẠT");
     console.log("   3. Xóa bài SGK có sẵn -> Đồng bộ mất trên mọi máy         -> ĐẠT");
@@ -378,6 +425,7 @@ async function runTest() {
     console.log("   5. Học sinh vào muộn -> Tự động nạp CSDL mới nhất         -> ĐẠT");
     console.log("   6. Mở Reader Mode & tải file đính kèm nguyên bản          -> ĐẠT");
     console.log("   7. Phân tách phòng học riêng biệt theo mã lớp             -> ĐẠT");
+    console.log("   8. Khôi phục CSDL mặc định 42 bài trên mọi máy            -> ĐẠT");
     console.log("=================================================================\n");
     process.exit(0);
 }

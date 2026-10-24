@@ -6,6 +6,16 @@
  * tải lên file Word/PDF, xuất tài liệu và chấm bài học sinh.
  */
 
+function escapeHtml(str) {
+    if (!str) return "";
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
 const TEACHER_AUTH_KEYS = {
             // Key 1: Cơ bản (6 ký tự)
             "SU2026": {
@@ -68,6 +78,23 @@ const TEACHER_AUTH_KEYS = {
         // ==========================================
         function openTeacherAuthGate(codeToEdit = "") {
             pendingEditPostCode = codeToEdit || "";
+            
+            // Nếu người dùng đang bật Quyền Quản trị viên (Admin) -> tự động cấp quyền Quản trị viên cấp cao nhất
+            const adminActive = (typeof window !== "undefined" && window.isAdmin) || (typeof isAdmin !== "undefined" && isAdmin);
+            if (adminActive) {
+                isTeacherAuthenticated = true;
+                sessionTeacherKey = "SECURE#2026$GV-HIST@SITUATION";
+                if (typeof window !== "undefined") {
+                    window.isTeacherAuthenticated = true;
+                    window.sessionTeacherKey = sessionTeacherKey;
+                    try {
+                        if (typeof sessionStorage !== "undefined") {
+                            sessionStorage.setItem("situation_teacher_session_key", sessionTeacherKey);
+                        }
+                    } catch (e) { }
+                }
+            }
+
             // Nếu đã xác thực trong phiên làm việc thì vào thẳng không gian đăng bài
             if (isTeacherAuthenticated && sessionTeacherKey && TEACHER_AUTH_KEYS[sessionTeacherKey]) {
                 openTeacherPostModal(pendingEditPostCode);
@@ -86,20 +113,24 @@ const TEACHER_AUTH_KEYS = {
                 gateInput.style.background = "#fff";
             }
             if (btnToggle) {
-                btnToggle.textContent = "👁️";
+                btnToggle.innerHTML = stIcon('eye', 18);
             }
             if (gateFeedback) {
                 gateFeedback.innerHTML = `<span style="color:var(--ink-muted);">Khu vực bảo mật dành cho Giáo viên. Vui lòng nhập mã khóa để tiếp tục.</span>`;
             }
             if (gateModal) {
                 gateModal.classList.add("open");
+                gateModal.style.display = "flex";
                 setTimeout(() => { if (gateInput) gateInput.focus(); }, 150);
             }
         }
 
         function closeTeacherAuthGate() {
             const gateModal = document.getElementById("teacherAuthGateModal");
-            if (gateModal) gateModal.classList.remove("open");
+            if (gateModal) {
+                gateModal.classList.remove("open");
+                gateModal.style.display = "none";
+            }
             pendingEditPostCode = "";
         }
 
@@ -109,10 +140,10 @@ const TEACHER_AUTH_KEYS = {
             if (!input) return;
             if (input.type === "password") {
                 input.type = "text";
-                if (btn) btn.textContent = "🔒";
+                if (btn) btn.innerHTML = stIcon('lock', 18);
             } else {
                 input.type = "password";
-                if (btn) btn.textContent = "👁️";
+                if (btn) btn.innerHTML = stIcon('eye', 18);
             }
         }
 
@@ -142,11 +173,22 @@ const TEACHER_AUTH_KEYS = {
             const input = document.getElementById("gateAuthKeyInput");
             const feedback = document.getElementById("gateKeyFeedback");
             const val = input ? input.value.trim() : "";
-            const match = TEACHER_AUTH_KEYS[val];
+            let match = TEACHER_AUTH_KEYS[val];
+
+            let customPass = null;
+            try {
+                if (typeof localStorage !== "undefined") {
+                    customPass = localStorage.getItem("situation_custom_admin_password");
+                }
+            } catch(e) {}
+
+            if (!match && customPass && val === customPass) {
+                match = TEACHER_AUTH_KEYS["SECURE#2026$GV-HIST@SITUATION"];
+            }
 
             if (!match) {
                 if (feedback) {
-                    feedback.innerHTML = `<span style="color:#C62828; font-weight:700;">❌ Mã khóa bảo mật không chính xác. Vui lòng thử lại!</span>`;
+                    feedback.innerHTML = `<span style="color:#C62828; font-weight:700;">${stIcon('close', 14)} Mã khóa bảo mật không chính xác. Vui lòng thử lại!</span>`;
                 }
                 if (input) {
                     input.focus();
@@ -159,16 +201,22 @@ const TEACHER_AUTH_KEYS = {
 
             // Xác thực thành công cho phiên hiện tại
             isTeacherAuthenticated = true;
-            sessionTeacherKey = val;
+            sessionTeacherKey = (match === TEACHER_AUTH_KEYS["SECURE#2026$GV-HIST@SITUATION"] && val === customPass) ? "SECURE#2026$GV-HIST@SITUATION" : val;
             if (typeof window !== "undefined") {
                 window.isTeacherAuthenticated = true;
-                window.sessionTeacherKey = val;
+                window.sessionTeacherKey = sessionTeacherKey;
             }
             try {
                 if (typeof sessionStorage !== "undefined") {
-                    sessionStorage.setItem("situation_teacher_session_key", val);
+                    sessionStorage.setItem("situation_teacher_session_key", sessionTeacherKey);
                 }
             } catch (e) { }
+
+            if (typeof updateRoleBadgeUI === "function") {
+                updateRoleBadgeUI();
+            } else if (typeof window !== "undefined" && typeof window.updateRoleBadgeUI === "function") {
+                window.updateRoleBadgeUI();
+            }
 
             closeTeacherAuthGate();
             openTeacherPostModal(pendingEditPostCode);
@@ -189,6 +237,13 @@ const TEACHER_AUTH_KEYS = {
                 } catch (e) { }
                 pendingEditPostCode = "";
                 closeTeacherPostModal();
+
+                if (typeof updateRoleBadgeUI === "function") {
+                    updateRoleBadgeUI();
+                } else if (typeof window !== "undefined" && typeof window.updateRoleBadgeUI === "function") {
+                    window.updateRoleBadgeUI();
+                }
+
                 alert("🔒 Đã khóa phiên làm việc giáo viên thành công.");
             }
         }
@@ -313,16 +368,29 @@ const TEACHER_AUTH_KEYS = {
         }
 
         // ==========================================
-        // BẬT / TẮT CHUYỂN ĐỘNG TRỐNG ĐỒNG ĐÔNG SƠN
+        // BẬT / TẮT CHUYỂN ĐỘNG TRỐNG ĐỒNG ĐÔNG SƠN & ĐỔI PHỐI MÀU NỀN TOÀN TRANG
         // ==========================================
         function toggleDrumRotation() {
             const wrapper = document.getElementById("dongsonDrumWrapper");
             const badge = document.getElementById("drumPlayStateBadge");
             const dot = document.getElementById("drumCaptionDot");
-            if (!wrapper) return;
-            const isPaused = wrapper.classList.toggle("paused");
-            if (badge) badge.textContent = isPaused ? "(Tạm dừng ⏸)" : "(Đang quay ↻)";
+            const bgBtn = document.getElementById("bgDrumToggleBtn");
+
+            let isPaused = false;
+            if (wrapper && wrapper.classList) {
+                isPaused = wrapper.classList.toggle("paused");
+            }
+            if (typeof document !== "undefined" && document.body && document.body.classList) {
+                if (!wrapper) {
+                    isPaused = document.body.classList.toggle("drum-rotation-paused");
+                } else {
+                    document.body.classList.toggle("drum-rotation-paused", isPaused);
+                }
+            }
+
+            if (badge) badge.textContent = isPaused ? "(Tạm dừng)" : "(Đang quay ↻)";
             if (dot) dot.style.background = isPaused ? "#FFB300" : "#00E676";
+            if (bgBtn) bgBtn.textContent = isPaused ? "▶ Tiếp tục quay" : "↻ Đang quay";
 
             // Tạm dừng cả chuyển động chim lạc để tiết kiệm 100% GPU cho máy cấu hình yếu
             document.querySelectorAll(".soaring-chim-lac").forEach(el => {
@@ -330,6 +398,27 @@ const TEACHER_AUTH_KEYS = {
             });
             const aura = document.querySelector(".drum-aura-glow");
             if (aura) aura.style.animationPlayState = isPaused ? "paused" : "running";
+        }
+
+        function setDongSonBgMode(mode) {
+            if (typeof document === "undefined" || !document.body || !document.body.classList) return;
+            document.body.classList.remove("bg-mode-lacquer", "bg-mode-bronze");
+            if (mode === "lacquer") {
+                document.body.classList.add("bg-mode-lacquer");
+            } else if (mode === "bronze") {
+                document.body.classList.add("bg-mode-bronze");
+            }
+            const btnIvory = document.getElementById("bgModeBtnIvory");
+            const btnLacquer = document.getElementById("bgModeBtnLacquer");
+            const btnBronze = document.getElementById("bgModeBtnBronze");
+            if (btnIvory && btnIvory.classList) btnIvory.classList.toggle("active", mode !== "lacquer" && mode !== "bronze");
+            if (btnLacquer && btnLacquer.classList) btnLacquer.classList.toggle("active", mode === "lacquer");
+            if (btnBronze && btnBronze.classList) btnBronze.classList.toggle("active", mode === "bronze");
+            try {
+                if (typeof localStorage !== "undefined") {
+                    localStorage.setItem("situation_dongson_bg_mode", mode || "ivory");
+                }
+            } catch (e) {}
         }
 
         // ==========================================
@@ -360,6 +449,7 @@ const TEACHER_AUTH_KEYS = {
 
             let fileData = item.fileData;
             let fileName = item.fileName;
+            if (!fileData && item.fileUrl) fileData = item.fileUrl;
             if (!fileData) {
                 const doc = documentStore.find(d => d.code === item.code);
                 if (doc && doc.fileData) {
@@ -406,6 +496,206 @@ const TEACHER_AUTH_KEYS = {
             const originTitle = item.originType === "TEACHER_CONTRIBUTED"
                 ? `Biên soạn đóng góp bởi Giáo viên: ${escapeHtml(item.author || 'Thầy/Cô')} (${escapeHtml(item.school || 'THPT')})`
                 : (item.originType === "VERIFIED_ORIGINAL" ? "Dữ liệu gốc đã xác thực kiểm chứng" : "Khung chương trình chuẩn SGK GDPT 2018");
+
+            const script15 = (typeof getOfficial15Script === "function" ? getOfficial15Script(item.code) : null) || item.scriptData;
+
+            // Nếu là 1 trong 15 hoạt cảnh chuẩn sư phạm, xuất bản tài liệu Word chuẩn 3 phần đầy đủ
+            if (script15) {
+                const safeCode = item.code.replace(/[^A-Za-z0-9]/g, "");
+                const savedRoles = (typeof getScriptRoleAssignments === "function") ? getScriptRoleAssignments(item.code) : {};
+                const partAChars = (script15.partA && (script15.partA.roles || script15.partA.characters)) ? (script15.partA.roles || script15.partA.characters) : [];
+                const rolesRows15 = partAChars.map((c, idx) => {
+                    const rName = c.name || c.role || "Nhân vật";
+                    const rDesc = c.desc || c.prep || "Đọc các lượt của vai; đánh dấu chỗ vào lời.";
+                    const studentName = savedRoles[idx] || c.studentName || "........................................................";
+                    const isFact = c.type === "HISTORICAL_FACT" || (!rName.includes("dẫn") && !rName.includes("Kỹ thuật"));
+                    const typeLabel = isFact ? "Nhân vật lịch sử xác thực" : "Vai kịch bản hóa";
+                    const typeColor = isFact ? "#1B5E20" : "#4A148C";
+                    return `
+                        <tr>
+                            <td style="text-align: center; font-weight: bold; width: 40px; border: 1px solid #777; padding: 6px;">${idx + 1}</td>
+                            <td style="font-weight: bold; color: #800020; width: 160px; border: 1px solid #777; padding: 6px;">${escapeHtml(rName)}</td>
+                            <td style="width: 150px; border: 1px solid #777; padding: 6px; font-size: 10pt; color: ${typeColor}; font-weight: bold;">${typeLabel}</td>
+                            <td style="border: 1px solid #777; padding: 6px; font-size: 10.5pt;">${escapeHtml(rDesc)}</td>
+                            <td style="width: 180px; border: 1px solid #777; padding: 6px; font-weight: bold; color: #0D47A1;">${escapeHtml(studentName)}</td>
+                        </tr>
+                    `;
+                }).join("");
+
+                const scenes15 = (script15.partB && script15.partB.scenes) ? script15.partB.scenes : [];
+                const scenesHtml15 = scenes15.map((sc, sIdx) => {
+                    const turnsRows = sc.turns.map(t => {
+                        const isNonSpoken = t.turn === "—" || t.dialogue.includes("Không đọc thành lời");
+                        return `
+                            <tr>
+                                <td style="text-align: center; font-weight: bold; width: 45px; border: 1px solid #888; padding: 6px; color: #800020;">${escapeHtml(t.turn)}</td>
+                                <td style="font-weight: bold; width: 160px; border: 1px solid #888; padding: 6px; color: #800020;">${escapeHtml(t.character)}</td>
+                                <td style="border: 1px solid #888; padding: 6px; font-style: ${isNonSpoken ? 'italic' : 'normal'}; color: ${isNonSpoken ? '#666' : '#000'};">${escapeHtml(t.dialogue)}</td>
+                                <td style="width: 220px; border: 1px solid #888; padding: 6px; color: #2E7D32; font-size: 10pt;">${escapeHtml(t.actionCue || '—')}</td>
+                            </tr>
+                        `;
+                    }).join("");
+
+                    return `
+                        <div style="margin-top: 18px; margin-bottom: 8px;">
+                            <strong style="color: #800020; font-size: 12.5pt; text-transform: uppercase;">${escapeHtml(sc.sceneName)}</strong>
+                        </div>
+                        <table class="data-table" style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">
+                            <thead>
+                                <tr style="background: #f0e6d6;">
+                                    <th style="width: 45px; text-align: center; border: 1px solid #777; padding: 6px;">Lượt</th>
+                                    <th style="width: 160px; border: 1px solid #777; padding: 6px;">Nhân vật</th>
+                                    <th style="border: 1px solid #777; padding: 6px;">Lời thoại kịch bản gốc</th>
+                                    <th style="width: 220px; border: 1px solid #777; padding: 6px;">Thao tác gợi ý (Dàn dựng)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${turnsRows}
+                            </tbody>
+                        </table>
+                    `;
+                }).join("");
+
+                const qaItems15 = (script15.partC && script15.partC.qa) ? script15.partC.qa : [];
+                const qaHtml15 = qaItems15.map((q, qIdx) => `
+                    <div style="margin-bottom: 10px; padding: 8px 12px; background: #fafafa; border-left: 4px solid #800020; border: 1px solid #ddd;">
+                        <p style="margin: 0 0 4px 0;"><strong>Câu hỏi ${qIdx + 1}:</strong> ${escapeHtml(q.question)}</p>
+                        <p style="margin: 0; color: #1B5E20; font-size: 11pt;"><strong>Gợi ý đối chiếu trả lời:</strong> ${escapeHtml(q.answerHint)}</p>
+                    </div>
+                `).join("");
+
+                const word15Content = `
+<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+<head>
+  <meta charset='utf-8'>
+  <title>Kịch bản Hoạt cảnh Lịch sử: ${escapeHtml(script15.title)}</title>
+  <style>
+    body { font-family: 'Times New Roman', serif; font-size: 12pt; line-height: 1.5; color: #111; margin: 2cm 1.8cm; }
+    .header-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    .header-table td { border: none; vertical-align: top; padding: 0; }
+    .doc-title { font-size: 16pt; font-weight: bold; color: #800020; text-align: center; margin-top: 15px; margin-bottom: 4px; text-transform: uppercase; }
+    .doc-subtitle { font-size: 12pt; font-weight: bold; color: #B8860B; text-align: center; margin-bottom: 20px; font-style: italic; }
+    .meta-box { background: #faf7f2; border: 1.5px solid #dcd3c5; border-left: 6px solid #800020; padding: 12px 16px; margin-bottom: 20px; }
+    .section-title { font-size: 13pt; font-weight: bold; color: #800020; border-bottom: 1.5px solid #800020; padding-bottom: 3px; margin-top: 20px; margin-bottom: 10px; text-transform: uppercase; }
+    table.data-table { width: 100%; border-collapse: collapse; margin-top: 6px; margin-bottom: 15px; }
+    table.data-table th { background-color: #f0e6d6; color: #5d101d; font-weight: bold; border: 1px solid #777; padding: 6px 8px; text-align: left; font-size: 11pt; }
+    table.data-table td { border: 1px solid #aaa; padding: 6px 8px; vertical-align: top; font-size: 11pt; }
+  </style>
+</head>
+<body>
+  <table class="header-table">
+    <tr>
+      <td style="text-align: center; width: 45%;">
+        <strong>BỘ GIÁO DỤC VÀ ĐÀO TẠO</strong><br/>
+        <strong>CHƯƠNG TRÌNH GDPT 2018 — MÔN LỊCH SỬ</strong><br/>
+        -------------------
+      </td>
+      <td style="text-align: center; width: 55%;">
+        <strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong><br/>
+        <strong>Độc lập – Tự do – Hạnh phúc</strong><br/>
+        *******************
+      </td>
+    </tr>
+  </table>
+
+  <div class="doc-title">KỊCH BẢN HOẠT CẢNH LỊCH SỬ CHUẨN SƯ PHẠM (DẠNG BẢNG)</div>
+  <div class="doc-subtitle">${escapeHtml(script15.title)} — ${escapeHtml(script15.format)}</div>
+
+  <div class="meta-box">
+    <table style="width: 100%; border: none; border-collapse: collapse;">
+      <tr>
+        <td style="border: none; padding: 3px 6px; width: 50%;"><strong>📌 Mã bài học:</strong> <span style="color: #800020; font-weight: bold;">${escapeHtml(item.code)}</span></td>
+        <td style="border: none; padding: 3px 6px; width: 50%;"><strong>🏷️ Mã đề chuẩn hóa:</strong> <span style="color: #BF360C; font-weight: bold;">${escapeHtml(examCode)}</span></td>
+      </tr>
+      <tr>
+        <td style="border: none; padding: 3px 6px;"><strong>🎓 Khối lớp:</strong> Lớp ${escapeHtml(item.grade)} THPT</td>
+        <td style="border: none; padding: 3px 6px;"><strong>⏱️ Thời lượng:</strong> ${escapeHtml(script15.duration || '3–5 phút')} (3 cảnh)</td>
+      </tr>
+      <tr>
+        <td style="border: none; padding: 3px 6px;" colspan="2"><strong>📖 Bài học SGK:</strong> ${escapeHtml(script15.lesson)}</td>
+      </tr>
+      <tr>
+        <td style="border: none; padding: 3px 6px;" colspan="2"><strong>📚 Chủ đề:</strong> ${escapeHtml(script15.topic)}</td>
+      </tr>
+      <tr>
+        <td style="border: none; padding: 3px 6px;" colspan="2"><strong>🎭 Tình huống sân khấu hóa:</strong> ${escapeHtml(script15.scenario)}</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="section-title">PHẦN A: BẢNG CHUẨN BỊ & PHÂN CÔNG VAI DIỄN</div>
+  <p><strong>1. Trọng tâm học tập:</strong> ${escapeHtml(script15.focus)}</p>
+  <p><strong>2. Bối cảnh lịch sử:</strong> ${escapeHtml(script15.context)}</p>
+  <p><strong>3. Danh sách phân công nhân vật & học sinh nhận vai:</strong></p>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th style="width: 40px; text-align: center;">STT</th>
+        <th style="width: 160px;">Tên nhân vật</th>
+        <th style="width: 150px;">Phân loại</th>
+        <th>Đặc điểm vai & Gợi ý diễn xuất</th>
+        <th style="width: 180px;">Học sinh / Nhóm đảm nhận</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rolesRows15}
+    </tbody>
+  </table>
+
+  <div class="section-title">PHẦN B: BẢNG DIỄN THEO LƯỢT (TOÀN VĂN KỊCH BẢN GỐC)</div>
+  ${scenesHtml15}
+
+  <div class="section-title">PHẦN C: PHẦN KẾT, CÂU HỎI KHÁN GIẢ & GỢI Ý ĐỐI CHIẾU</div>
+  <p><strong>1. Câu hỏi thảo luận dành cho khán giả sau hoạt cảnh:</strong></p>
+  ${qaHtml15}
+  <div style="margin-top: 10px;">
+    <p><strong>2. Lưu ý nội dung & ranh giới diễn xuất:</strong> ${escapeHtml(script15.partC && script15.partC.contentNotes ? script15.partC.contentNotes : 'Phân biệt rõ dữ kiện lịch sử có căn cứ và chi tiết kịch bản hư cấu sáng tạo.')}</p>
+    <p><strong>3. Nguồn tra cứu:</strong> ${escapeHtml(script15.partC && script15.partC.sourceRef ? script15.partC.sourceRef : script15.sources)}</p>
+    <p><strong>4. Nhiệm vụ nối tiếp:</strong> ${escapeHtml(script15.partC && script15.partC.nextTask ? script15.partC.nextTask : 'Hoàn thành phiếu đối chiếu dữ kiện lịch sử M02.')}</p>
+  </div>
+
+  <div class="section-title">HƯỚNG DẪN 5 BƯỚC TẬP HOẠT CẢNH CHUẨN SƯ PHẠM GDPT 2018</div>
+  <ol>
+    <li><strong>Bước 1 - Đọc kịch bản & Nắm bối cảnh:</strong> Học sinh đọc toàn bộ kịch bản, xác định bối cảnh lịch sử, nắm thông điệp cốt lõi bài học.</li>
+    <li><strong>Bước 2 - Phân công vai diễn:</strong> Phân chia người dẫn, các nhân vật và kỹ thuật. Ghi tên học sinh nhận vai vào bảng phân vai.</li>
+    <li><strong>Bước 3 - Luyện đọc khớp nhịp & Thao tác thẻ:</strong> Khớp lượt nói từng cảnh (Cảnh 1, 2, 3), làm quen cử chỉ gợi ý, thao tác đạo cụ nhẹ/thẻ mô phỏng.</li>
+    <li><strong>Bước 4 - Diễn thử có bấm giờ (3–5 phút):</strong> Thực hành diễn toàn bộ hoạt cảnh trong khung thời gian 3–5 phút; tránh kéo dài bằng lời hô đồng thanh.</li>
+    <li><strong>Bước 5 - Hỏi đáp khán giả & Rút ra bài học:</strong> Thực hiện phần kết: đặt 3 câu hỏi cho người xem, đối chiếu gợi ý trả lời, phân biệt giữa sự thật lịch sử và hư cấu kịch bản.</li>
+  </ol>
+
+  <table style="width: 100%; border: none; margin-top: 35px;">
+    <tr>
+      <td style="border: none; width: 50%; text-align: center; vertical-align: top;">
+        <em>Ngày xuất bản: ${new Date().toLocaleDateString('vi-VN')}</em><br/>
+        <strong>HỆ THỐNG NỀN TẢNG SITUATION</strong><br/>
+        <span style="font-size: 10pt; color: #666;">Kho tri thức Sân khấu hóa Lịch sử THPT</span>
+      </td>
+      <td style="border: none; width: 50%; text-align: center; vertical-align: top;">
+        <em>Xác thực hồ sơ</em><br/>
+        <strong>TỔ CHUYÊN MÔN LỊCH SỬ THPT</strong><br/>
+        <span style="font-size: 10pt; color: #666;">(Ký, đóng dấu số hóa)</span>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+                `;
+
+                try {
+                    const blob = new Blob(['\ufeff', word15Content], { type: 'application/msword;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = outDocFileName;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                    return;
+                } catch (err) {
+                    console.error("Lỗi tạo file Word 15 bài:", err);
+                }
+            }
 
             const htmlContent = `
 <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
@@ -740,19 +1030,19 @@ const TEACHER_AUTH_KEYS = {
             // Hiển thị ngay khung đọc Kịch bản & Phân vai Reader Mode trực tiếp trên web (0 lỗi alert)
             if (!fileData) {
                 if (previewTitle) {
-                    previewTitle.innerHTML = `<span>📖</span> Đọc Kịch bản Hoạt cảnh: <strong>${escapeHtml(item.lesson)}</strong> (${escapeHtml(item.code)})`;
+                    previewTitle.innerHTML = `${stIcon('book', 16)} Đọc Kịch bản Hoạt cảnh: <strong>${escapeHtml(item.lesson)}</strong> (${escapeHtml(item.code)})`;
                 }
                 previewContent.innerHTML = `
                     <div style="background: #fff; border: 1.5px solid var(--border); border-left: 4px solid var(--burgundy); border-radius: 6px; padding: 1.25rem; box-shadow: 0 2px 6px rgba(0,0,0,0.04);">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
                             <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
-                                <span style="font-family: monospace; font-weight: 700; background: #FFF3E0; color: #BF360C; border: 1px solid #FFE0B2; padding: 0.12rem 0.45rem; border-radius: 3px; font-size: 0.8rem;">🏷️ Mã đề: ${escapeHtml(examCode)}</span>
+                                <span style="font-family: monospace; font-weight: 700; background: #FFF3E0; color: #BF360C; border: 1px solid #FFE0B2; padding: 0.12rem 0.45rem; border-radius: 3px; font-size: 0.8rem;">${stIcon('tag', 13)} Mã đề: ${escapeHtml(examCode)}</span>
                                 <span style="font-family: monospace; font-weight: 700; background: var(--burgundy); color: #fff; padding: 0.12rem 0.45rem; border-radius: 3px; font-size: 0.8rem;">${escapeHtml(item.code)}</span>
                                 <span style="font-size: 0.8rem; background: var(--ivory); border: 1px solid var(--gold); color: var(--burgundy); padding: 0.12rem 0.45rem; border-radius: 3px; font-weight: 600;">Khối ${escapeHtml(item.grade)}</span>
                             </div>
                             <div style="display: flex; gap: 0.4rem;">
                                 <button type="button" class="btn-primary" style="font-size: 0.8rem; padding: 0.35rem 0.85rem; background: #2E7D32; border-color: #1B5E20;" onclick="downloadTeacherWordFile('${escapeHtml(item.code)}')">
-                                    ⬇️ Tải tệp Word (.docx, .doc)
+                                    ${stIcon('download', 14)} Tải tệp Word (.docx, .doc)
                                 </button>
                             </div>
                         </div>
@@ -761,12 +1051,12 @@ const TEACHER_AUTH_KEYS = {
                             <strong>Trọng tâm học tập:</strong> ${escapeHtml(item.focus)}
                         </div>
                         <div style="background: var(--ivory); border: 1px solid var(--border); border-radius: 4px; padding: 1rem; margin-bottom: 0.85rem;">
-                            <div style="font-size: 0.8rem; font-weight: 700; color: var(--burgundy); text-transform: uppercase; margin-bottom: 0.4rem;">📜 Ý tưởng & Kịch bản Hoạt cảnh:</div>
+                            <div style="font-size: 0.8rem; font-weight: 700; color: var(--burgundy); text-transform: uppercase; margin-bottom: 0.4rem;">${stIcon('scroll', 14)} Ý tưởng & Kịch bản Hoạt cảnh:</div>
                             <div style="font-size: 0.96rem; color: #1B0E07; line-height: 1.7; white-space: pre-wrap;">${escapeHtml(item.scenario)}</div>
                         </div>
                         ${(item.characters && item.characters.length > 0) ? `
                         <div style="font-size: 0.88rem; background: #FAF9F5; border: 1px dashed var(--border); border-radius: 4px; padding: 0.75rem 1rem;">
-                            <div style="font-weight: 700; color: var(--burgundy); margin-bottom: 0.4rem;">🎭 Gợi ý Phân vai Nhân vật:</div>
+                            <div style="font-weight: 700; color: var(--burgundy); margin-bottom: 0.4rem;">${stIcon('mask', 14)} Gợi ý Phân vai Nhân vật:</div>
                             <ul style="margin: 0; padding-left: 1.25rem; line-height: 1.55;">
                                 ${item.characters.map(c => `<li style="margin-bottom: 0.3rem;"><strong>${escapeHtml(c.name)}</strong>: ${escapeHtml(c.desc)}</li>`).join("")}
                             </ul>
@@ -779,7 +1069,8 @@ const TEACHER_AUTH_KEYS = {
             }
 
             const ext = (fileName || "").slice((fileName.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
-            const blob = dataUrlToBlob(fileData);
+            const isStaticUrl = typeof fileData === "string" && (fileData.startsWith("http") || fileData.startsWith("uploads/") || fileData.startsWith("/uploads/"));
+            const blob = isStaticUrl ? null : dataUrlToBlob(fileData);
             if (currentActivePreviewBlobUrl) {
                 try { URL.revokeObjectURL(currentActivePreviewBlobUrl); } catch(e) {}
                 currentActivePreviewBlobUrl = null;
@@ -789,17 +1080,17 @@ const TEACHER_AUTH_KEYS = {
             }
 
             if (previewTitle) {
-                previewTitle.innerHTML = `<span>👁️</span> Xem trước tệp đính kèm: <strong>${escapeHtml(fileName || 'Tài liệu')}</strong> <span class="format-tag" style="font-size:0.75rem; margin-left:0.4rem;">${ext.toUpperCase()}</span>`;
+                previewTitle.innerHTML = `${stIcon('eye', 16)} Xem trước tệp đính kèm: <strong>${escapeHtml(fileName || 'Tài liệu')}</strong> <span class="format-tag" style="font-size:0.75rem; margin-left:0.4rem;">${ext.toUpperCase()}</span>`;
             }
 
             if (ext === "pdf") {
-                const srcUrl = currentActivePreviewBlobUrl || fileData;
+                const srcUrl = isStaticUrl ? fileData : (currentActivePreviewBlobUrl || fileData);
                 previewContent.innerHTML = `
                     <div style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: #1B5E20; background: #F1F8E9; padding: 6px 12px; border-radius: 4px; flex-wrap: wrap; gap: 0.4rem;">
-                        <span>📄 Tài liệu PDF nguyên bản: <strong>${escapeHtml(fileName)}</strong> (${Math.round((item.fileSize || 0) / 1024)} KB)</span>
+                        <span>${stIcon('doc-pdf', 15)} Tài liệu PDF nguyên bản: <strong>${escapeHtml(fileName)}</strong> (${Math.round((item.fileSize || 0) / 1024)} KB)</span>
                         <div style="display: flex; gap: 0.4rem;">
-                            <a href="${srcUrl}" target="_blank" class="btn-secondary" style="font-size: 0.78rem; padding: 0.2rem 0.6rem; text-decoration: none;">↗️ Mở tab riêng</a>
-                            <button type="button" class="btn-primary" style="font-size: 0.78rem; padding: 0.2rem 0.7rem; background: #2E7D32; border-color: #1B5E20;" onclick="exportLessonOriginalFile(catalogData.find(i=>i.code==='${escapeHtml(item.code)}'))">⬇️ Tải tệp</button>
+                            <a href="${srcUrl}" target="_blank" class="btn-secondary" style="font-size: 0.78rem; padding: 0.2rem 0.6rem; text-decoration: none;">${stIcon('window', 13)} Mở tab riêng</a>
+                            <button type="button" class="btn-primary" style="font-size: 0.78rem; padding: 0.2rem 0.7rem; background: #2E7D32; border-color: #1B5E20;" onclick="exportLessonOriginalFile(catalogData.find(i=>i.code==='${escapeHtml(item.code)}'))">${stIcon('download', 13)} Tải tệp</button>
                         </div>
                     </div>
                     <iframe src="${srcUrl}" style="width: 100%; height: 560px; border: 1.5px solid #C8E6C9; border-radius: 4px; background: #fdfdfd;" title="Xem trước PDF"></iframe>
@@ -814,8 +1105,8 @@ const TEACHER_AUTH_KEYS = {
                 }
                 previewContent.innerHTML = `
                     <div style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: #333; background: #fafafa; padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px;">
-                        <span>📝 Tệp văn bản thuần Text: <strong>${escapeHtml(fileName)}</strong></span>
-                        <button type="button" class="btn-primary" style="font-size: 0.78rem; padding: 0.2rem 0.7rem; background: #2E7D32; border-color: #1B5E20;" onclick="exportLessonOriginalFile(catalogData.find(i=>i.code==='${escapeHtml(item.code)}'))">⬇️ Tải tệp</button>
+                        <span>${stIcon('doc-txt', 15)} Tệp văn bản thuần Text: <strong>${escapeHtml(fileName)}</strong></span>
+                        <button type="button" class="btn-primary" style="font-size: 0.78rem; padding: 0.2rem 0.7rem; background: #2E7D32; border-color: #1B5E20;" onclick="exportLessonOriginalFile(catalogData.find(i=>i.code==='${escapeHtml(item.code)}'))">${stIcon('download', 13)} Tải tệp</button>
                     </div>
                     <pre style="max-height: 500px; overflow-y: auto; white-space: pre-wrap; font-family: 'Consolas', 'Courier New', monospace; font-size: 0.92rem; line-height: 1.65; background: #fff; border: 1px solid #ccc; padding: 14px; border-radius: 4px;">${escapeHtml(plainText)}</pre>
                 `;
@@ -825,18 +1116,18 @@ const TEACHER_AUTH_KEYS = {
                     <div style="padding: 1.5rem; background: #F9FBE7; border: 1.5px solid #DCE775; border-radius: 6px; margin-bottom: 0.85rem;">
                         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem;">
                             <div style="display: flex; align-items: center; gap: 0.75rem;">
-                                <span style="font-size: 2.5rem;">📘</span>
+                                <span style="color: #33691E;">${stIcon('doc-word', 34)}</span>
                                 <div>
                                     <h4 style="color: #33691E; font-size: 1.12rem; margin: 0 0 0.25rem 0;">Tệp Microsoft Word: ${escapeHtml(fileName)}</h4>
                                     <div style="font-size: 0.82rem; color: #558B2F;">Dung lượng: ${item.fileSize ? Math.round(item.fileSize / 1024) + ' KB' : 'Đã nạp'} • Định dạng: Word (.${ext})</div>
                                 </div>
                             </div>
                             <button type="button" class="btn-primary" style="background: #2E7D32; border-color: #1B5E20; font-weight: 700; padding: 0.5rem 1.25rem; font-size: 0.86rem;" onclick="exportLessonOriginalFile(catalogData.find(i=>i.code==='${escapeHtml(item.code)}'))">
-                                ⬇️ Tải tệp ${escapeHtml(fileName)} về máy
+                                ${stIcon('download', 15)} Tải tệp ${escapeHtml(fileName)} về máy
                             </button>
                         </div>
                         <div style="background: #fff; border: 1px solid #DCE775; border-radius: 4px; padding: 1rem;">
-                            <div style="font-size: 0.8rem; font-weight: 700; color: #33691E; text-transform: uppercase; margin-bottom: 0.4rem;">📜 Trích lược Kịch bản & Lời thoại:</div>
+                            <div style="font-size: 0.8rem; font-weight: 700; color: #33691E; text-transform: uppercase; margin-bottom: 0.4rem;">${stIcon('scroll', 14)} Trích lược Kịch bản & Lời thoại:</div>
                             <div style="font-size: 0.95rem; color: #1B0E07; line-height: 1.7; white-space: pre-wrap;">${escapeHtml(item.scenario)}</div>
                         </div>
                     </div>
@@ -888,6 +1179,197 @@ const TEACHER_AUTH_KEYS = {
 
         function buildLessonPrintableHtml(item) {
             const examCode = getPostExamCode(item);
+            const script15 = (typeof getOfficial15Script === "function" ? getOfficial15Script(item.code) : null) || item.scriptData;
+
+            if (script15) {
+                const safeCode = item.code.replace(/[^A-Za-z0-9]/g, "");
+                const savedRoles = (typeof getScriptRoleAssignments === "function") ? getScriptRoleAssignments(item.code) : {};
+                const partAChars = (script15.partA && (script15.partA.roles || script15.partA.characters)) ? (script15.partA.roles || script15.partA.characters) : [];
+                const rolesRows15 = partAChars.map((c, idx) => {
+                    const rName = c.name || c.role || "Nhân vật";
+                    const rDesc = c.desc || c.prep || "Đọc các lượt của vai; đánh dấu chỗ vào lời.";
+                    const studentName = savedRoles[idx] || c.studentName || "........................................................";
+                    const isFact = c.type === "HISTORICAL_FACT" || (!rName.includes("dẫn") && !rName.includes("Kỹ thuật"));
+                    const typeLabel = isFact ? "Lịch sử xác thực" : "Vai kịch bản";
+                    return `
+                        <tr>
+                            <td style="text-align: center; font-weight: bold; width: 35px; border: 1px solid #777; padding: 5px;">${idx + 1}</td>
+                            <td style="font-weight: bold; color: #800020; width: 150px; border: 1px solid #777; padding: 5px;">${escapeHtml(rName)}</td>
+                            <td style="width: 130px; border: 1px solid #777; padding: 5px; font-size: 9.5pt; font-weight: bold;">${typeLabel}</td>
+                            <td style="border: 1px solid #777; padding: 5px; font-size: 10pt;">${escapeHtml(rDesc)}</td>
+                            <td style="width: 170px; border: 1px solid #777; padding: 5px; color: #0D47A1; font-weight: bold;">${escapeHtml(studentName)}</td>
+                        </tr>
+                    `;
+                }).join("");
+
+                const scenes15 = (script15.partB && script15.partB.scenes) ? script15.partB.scenes : [];
+                const scenesHtml15 = scenes15.map((sc, sIdx) => {
+                    const turnsRows = sc.turns.map(t => {
+                        const isNonSpoken = t.turn === "—" || t.dialogue.includes("Không đọc thành lời");
+                        return `
+                            <tr>
+                                <td style="text-align: center; font-weight: bold; width: 40px; border: 1px solid #888; padding: 5px; color: #800020;">${escapeHtml(t.turn)}</td>
+                                <td style="font-weight: bold; width: 150px; border: 1px solid #888; padding: 5px; color: #800020;">${escapeHtml(t.character)}</td>
+                                <td style="border: 1px solid #888; padding: 5px; font-style: ${isNonSpoken ? 'italic' : 'normal'}; color: ${isNonSpoken ? '#666' : '#000'}; font-size: 10.5pt;">${escapeHtml(t.dialogue)}</td>
+                                <td style="width: 210px; border: 1px solid #888; padding: 5px; color: #2E7D32; font-size: 9.5pt;">${escapeHtml(t.actionCue || '—')}</td>
+                            </tr>
+                        `;
+                    }).join("");
+
+                    return `
+                        <div style="margin-top: 14px; margin-bottom: 6px;">
+                            <strong style="color: #800020; font-size: 11.5pt; text-transform: uppercase;">${escapeHtml(sc.sceneName)}</strong>
+                        </div>
+                        <table class="data-table" style="width: 100%; border-collapse: collapse; margin-bottom: 12px;">
+                            <thead>
+                                <tr style="background: #f0e6d6;">
+                                    <th style="width: 40px; text-align: center; border: 1px solid #777; padding: 5px;">Lượt</th>
+                                    <th style="width: 150px; border: 1px solid #777; padding: 5px;">Nhân vật</th>
+                                    <th style="border: 1px solid #777; padding: 5px;">Lời thoại kịch bản gốc</th>
+                                    <th style="width: 210px; border: 1px solid #777; padding: 5px;">Thao tác gợi ý (Dàn dựng)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${turnsRows}
+                            </tbody>
+                        </table>
+                    `;
+                }).join("");
+
+                const qaItems15 = (script15.partC && script15.partC.qa) ? script15.partC.qa : [];
+                const qaHtml15 = qaItems15.map((q, qIdx) => `
+                    <div style="margin-bottom: 8px; padding: 6px 10px; background: #fafafa; border-left: 4px solid #800020; border: 1px solid #ddd;">
+                        <p style="margin: 0 0 3px 0; font-size: 10.5pt;"><strong>Câu hỏi ${qIdx + 1}:</strong> ${escapeHtml(q.question)}</p>
+                        <p style="margin: 0; color: #1B5E20; font-size: 10pt;"><strong>Gợi ý đối chiếu:</strong> ${escapeHtml(q.answerHint)}</p>
+                    </div>
+                `).join("");
+
+                return `<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <title>Bản in Kịch bản Chuẩn Sư Phạm: ${escapeHtml(script15.title)}</title>
+  <style>
+    @page { size: A4 portrait; margin: 15mm 15mm 15mm 15mm; }
+    body { font-family: 'Times New Roman', serif; font-size: 11pt; line-height: 1.45; color: #111; margin: 0; padding: 0; background: #fff; }
+    .no-print { display: flex; justify-content: space-between; align-items: center; background: #faf7f2; border: 1px solid #dcd3c5; padding: 10px 18px; margin-bottom: 20px; border-radius: 6px; }
+    @media print { .no-print { display: none !important; } body { margin: 0; padding: 0; } }
+    .header-tbl { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+    .header-tbl td { vertical-align: top; border: none; padding: 0; }
+    .doc-title { text-align: center; font-size: 15pt; font-weight: bold; color: #800020; text-transform: uppercase; margin-top: 10px; margin-bottom: 4px; }
+    .doc-subtitle { text-align: center; font-size: 11pt; font-style: italic; color: #555; margin-bottom: 16px; }
+    .meta-box { background: #faf7f2; border: 1px solid #bbb; border-left: 4px solid #800020; padding: 10px 14px; margin-bottom: 16px; font-size: 10.5pt; }
+    .sec-h { font-size: 12pt; font-weight: bold; color: #800020; border-bottom: 1px solid #800020; padding-bottom: 3px; margin-top: 16px; margin-bottom: 8px; text-transform: uppercase; }
+    table.data-table { width: 100%; border-collapse: collapse; margin-top: 6px; margin-bottom: 12px; }
+    table.data-table th { background: #f0e6d6; color: #5d101d; font-weight: bold; border: 1px solid #777; padding: 5px; text-align: left; font-size: 10pt; }
+    table.data-table td { border: 1px solid #aaa; padding: 5px; font-size: 10pt; }
+  </style>
+</head>
+<body>
+  <div class="no-print">
+    <div>
+      <strong style="color: #800020; font-size: 13pt;">📑 Bản In Sư Phạm / Lưu PDF (A4)</strong>
+      <span style="font-size: 10pt; color: #555; margin-left: 10px;">(Chọn "Save as PDF" trong hộp thoại in để lưu file PDF)</span>
+    </div>
+    <button onclick="window.print()" style="background: #800020; color: #fff; border: none; padding: 8px 18px; border-radius: 4px; cursor: pointer; font-weight: bold;">🖨️ In Ngay / Lưu PDF</button>
+  </div>
+
+  <table class="header-tbl">
+    <tr>
+      <td style="width: 45%; text-align: center;">
+        <strong>BỘ GIÁO DỤC VÀ ĐÀO TẠO</strong><br/>
+        <strong>CHƯƠNG TRÌNH GDPT 2018 — MÔN LỊCH SỬ</strong><br/>
+        -------------------
+      </td>
+      <td style="width: 55%; text-align: center;">
+        <strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong><br/>
+        <strong>Độc lập – Tự do – Hạnh phúc</strong><br/>
+        *******************
+      </td>
+    </tr>
+  </table>
+
+  <div class="doc-title">HỒ SƠ KỊCH BẢN HOẠT CẢNH LỊCH SỬ CHUẨN SƯ PHẠM</div>
+  <div class="doc-subtitle">${escapeHtml(script15.title)} — ${escapeHtml(script15.format)}</div>
+
+  <div class="meta-box">
+    <table style="width: 100%; border: none; border-collapse: collapse;">
+      <tr>
+        <td style="border: none; padding: 3px 6px; width: 50%;"><strong>📌 Mã bài học:</strong> <span style="color: #800020; font-weight: bold;">${escapeHtml(item.code)}</span></td>
+        <td style="border: none; padding: 3px 6px; width: 50%;"><strong>🏷️ Mã đề chuẩn hóa:</strong> <span style="color: #BF360C; font-weight: bold;">${escapeHtml(examCode)}</span></td>
+      </tr>
+      <tr>
+        <td style="border: none; padding: 3px 6px;"><strong>🎓 Khối lớp:</strong> Lớp ${escapeHtml(item.grade)} THPT</td>
+        <td style="border: none; padding: 3px 6px;"><strong>⏱️ Thời lượng:</strong> ${escapeHtml(script15.duration || '3–5 phút')}</td>
+      </tr>
+      <tr>
+        <td style="border: none; padding: 3px 6px;" colspan="2"><strong>📖 Bài học SGK:</strong> ${escapeHtml(script15.lesson)}</td>
+      </tr>
+      <tr>
+        <td style="border: none; padding: 3px 6px;" colspan="2"><strong>📚 Chủ đề:</strong> ${escapeHtml(script15.topic)}</td>
+      </tr>
+      <tr>
+        <td style="border: none; padding: 3px 6px;" colspan="2"><strong>🎭 Tình huống sân khấu hóa:</strong> ${escapeHtml(script15.scenario)}</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="sec-h">PHẦN A: BẢNG CHUẨN BỊ & PHÂN CÔNG VAI DIỄN</div>
+  <p><strong>1. Trọng tâm học tập:</strong> ${escapeHtml(script15.focus)}</p>
+  <p><strong>2. Bối cảnh lịch sử:</strong> ${escapeHtml(script15.context)}</p>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th style="width: 35px; text-align: center;">STT</th>
+        <th style="width: 150px;">Tên nhân vật</th>
+        <th style="width: 130px;">Phân loại</th>
+        <th>Đặc điểm vai & Gợi ý diễn xuất</th>
+        <th style="width: 170px;">Học sinh nhận vai</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rolesRows15}
+    </tbody>
+  </table>
+
+  <div class="sec-h">PHẦN B: BẢNG DIỄN THEO LƯỢT (TOÀN VĂN KỊCH BẢN GỐC)</div>
+  ${scenesHtml15}
+
+  <div class="sec-h">PHẦN C: PHẦN KẾT, CÂU HỎI KHÁN GIẢ & GỢI Ý ĐỐI CHIẾU</div>
+  ${qaHtml15}
+  <div style="margin-top: 8px; font-size: 10pt;">
+    <p><strong>Lưu ý nội dung:</strong> ${escapeHtml(script15.partC && script15.partC.contentNotes ? script15.partC.contentNotes : 'Phân biệt rõ dữ kiện lịch sử có căn cứ và chi tiết kịch bản hư cấu sáng tạo.')}</p>
+    <p><strong>Nguồn tra cứu:</strong> ${escapeHtml(script15.partC && script15.partC.sourceRef ? script15.partC.sourceRef : script15.sources)}</p>
+    <p><strong>Nhiệm vụ nối tiếp:</strong> ${escapeHtml(script15.partC && script15.partC.nextTask ? script15.partC.nextTask : 'Hoàn thành phiếu đối chiếu dữ kiện lịch sử M02.')}</p>
+  </div>
+
+  <div class="sec-h">QUY TRÌNH 5 BƯỚC TẬP HOẠT CẢNH CHUẨN SƯ PHẠM GDPT 2018</div>
+  <ol style="font-size: 10pt; line-height: 1.5;">
+    <li><strong>Bước 1 - Đọc kịch bản & Nắm bối cảnh:</strong> Học sinh đọc toàn bộ kịch bản, xác định bối cảnh lịch sử, nắm thông điệp cốt lõi bài học.</li>
+    <li><strong>Bước 2 - Phân công vai diễn:</strong> Phân chia người dẫn, các nhân vật và kỹ thuật. Ghi tên học sinh nhận vai vào bảng phân vai.</li>
+    <li><strong>Bước 3 - Luyện đọc khớp nhịp & Thao tác thẻ:</strong> Khớp lượt nói từng cảnh (Cảnh 1, 2, 3), làm quen cử chỉ gợi ý, thao tác đạo cụ nhẹ/thẻ mô phỏng.</li>
+    <li><strong>Bước 4 - Diễn thử có bấm giờ (3–5 phút):</strong> Thực hành diễn toàn bộ hoạt cảnh trong khung thời gian 3–5 phút; tránh kéo dài bằng lời hô đồng thanh.</li>
+    <li><strong>Bước 5 - Hỏi đáp khán giả & Rút ra bài học:</strong> Thực hiện phần kết: đặt 3 câu hỏi cho người xem, đối chiếu gợi ý trả lời, phân biệt giữa sự thật lịch sử và hư cấu kịch bản.</li>
+  </ol>
+
+  <table style="width: 100%; border: none; margin-top: 30px;">
+    <tr>
+      <td style="width: 50%; border: none; text-align: center; vertical-align: top;">
+        <br/>
+        <strong>GIÁO VIÊN BỘ MÔN / NHÓM HỌC SINH</strong><br/>
+        <span style="font-size: 9.5pt; color: #555;">(Ký và ghi rõ họ tên)</span>
+      </td>
+      <td style="width: 50%; border: none; text-align: center; vertical-align: top;">
+        <em>Hà Nội, ngày .... tháng .... năm 2026</em><br/>
+        <strong>TỔ CHUYÊN MÔN LỊCH SỬ THPT SITUATION</strong><br/>
+        <span style="font-size: 9.5pt; color: #555;">(Xác thực hồ sơ số hóa)</span>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+            }
+
             const charsRows = (item.characters && item.characters.length > 0)
                 ? item.characters.map((c, idx) => {
                     const isFact = c.type === "HISTORICAL_FACT";
@@ -1063,6 +1545,100 @@ const TEACHER_AUTH_KEYS = {
 
         function buildLessonPlainText(item) {
             const examCode = getPostExamCode(item);
+            const script15 = (typeof getOfficial15Script === "function" ? getOfficial15Script(item.code) : null) || item.scriptData;
+
+            if (script15) {
+                const safeCode = item.code.replace(/[^A-Za-z0-9]/g, "");
+                const savedRoles = (typeof getScriptRoleAssignments === "function") ? getScriptRoleAssignments(item.code) : {};
+                const partAChars = (script15.partA && (script15.partA.roles || script15.partA.characters)) ? (script15.partA.roles || script15.partA.characters) : [];
+                const rolesText = partAChars.map((c, idx) => {
+                    const rName = c.name || c.role || "Nhân vật";
+                    const rDesc = c.desc || c.prep || "Đọc các lượt của vai; đánh dấu chỗ vào lời.";
+                    const studentName = savedRoles[idx] || c.studentName || "(Chưa ghi tên)";
+                    const isFact = c.type === "HISTORICAL_FACT" || (!rName.includes("dẫn") && !rName.includes("Kỹ thuật"));
+                    return `  ${idx + 1}. ${rName} [${isFact ? 'Lịch sử' : 'Sáng tạo'}]
+     - Đặc điểm: ${rDesc}
+     - Học sinh nhận vai: ${studentName}`;
+                }).join("\n\n");
+
+                const scenes15 = (script15.partB && script15.partB.scenes) ? script15.partB.scenes : [];
+                const scenesText = scenes15.map(sc => {
+                    const turns = sc.turns.map(t => {
+                        const cue = t.actionCue ? ` [Thao tác: ${t.actionCue}]` : '';
+                        return `  [Lượt ${t.turn}] ${t.character}: "${t.dialogue}"${cue}`;
+                    }).join("\n");
+                    return `=== ${sc.sceneName.toUpperCase()} ===\n${turns}`;
+                }).join("\n\n");
+
+                const qaItems15 = (script15.partC && script15.partC.qa) ? script15.partC.qa : [];
+                const qaText = qaItems15.map((q, idx) => {
+                    return `  Câu hỏi ${idx + 1}: ${q.question}\n  -> Gợi ý đối chiếu: ${q.answerHint}`;
+                }).join("\n\n");
+
+                return `================================================================================
+BỘ GIÁO DỤC VÀ ĐÀO TẠO — HỆ THỐNG TRA CỨU TƯ LIỆU LỊCH SỬ THPT SITUATION
+HỒ SƠ KỊCH BẢN HOẠT CẢNH LỊCH SỬ CHUẨN SƯ PHẠM (CHƯƠNG TRÌNH GDPT 2018)
+================================================================================
+
+📌 MÃ BÀI HỌC   : ${item.code}
+🏷️ MÃ ĐỀ THI    : ${examCode}
+🎓 KHỐI LỚP     : Lớp ${item.grade} THPT
+📚 CHỦ ĐỀ       : ${script15.topic}
+📖 BÀI HỌC SGK  : ${script15.lesson}
+🎭 TIÊU ĐỀ      : ${script15.title} (${script15.format})
+⏱️ THỜI LƯỢNG   : ${script15.duration || '3–5 phút'}
+🔍 NGUỒN CĂN CỨ : ${script15.sources || 'GDPT 2018'}
+
+--------------------------------------------------------------------------------
+PHẦN A: BẢNG CHUẨN BỊ & PHÂN CÔNG VAI DIỄN
+--------------------------------------------------------------------------------
+1. BỐI CẢNH LỊCH SỬ:
+${script15.context}
+
+2. TRỌNG TÂM HỌC TẬP:
+${script15.focus}
+
+3. TÌNH HUỐNG SÂN KHẤU HÓA:
+${script15.scenario}
+
+4. DANH SÁCH NHÂN VẬT & PHÂN CÔNG HỌC SINH:
+${rolesText}
+
+--------------------------------------------------------------------------------
+PHẦN B: BẢNG DIỄN THEO LƯỢT (TOÀN VĂN KỊCH BẢN GỐC)
+--------------------------------------------------------------------------------
+${scenesText}
+
+--------------------------------------------------------------------------------
+PHẦN C: PHẦN KẾT, CÂU HỎI KHÁN GIẢ & GỢI Ý ĐỐI CHIẾU
+--------------------------------------------------------------------------------
+1. CÂU HỎI DÀNH CHO KHÁN GIẢ SAU HOẠT CẢNH:
+${qaText}
+
+2. LƯU Ý NỘI DUNG & RANH GIỚI DIỄN XUẤT:
+${script15.partC && script15.partC.contentNotes ? script15.partC.contentNotes : 'Phân biệt rõ dữ kiện lịch sử và chi tiết sáng tạo.'}
+
+3. TÀI LIỆU ĐỐI CHIẾU:
+${script15.partC && script15.partC.sourceRef ? script15.partC.sourceRef : script15.sources}
+
+4. NHIỆM VỤ NỐI TIẾP:
+${script15.partC && script15.partC.nextTask ? script15.partC.nextTask : 'Hoàn thành phiếu đối chiếu dữ kiện lịch sử M02.'}
+
+--------------------------------------------------------------------------------
+QUY TRÌNH 5 BƯỚC TẬP HOẠT CẢNH CHUẨN SƯ PHẠM GDPT 2018
+--------------------------------------------------------------------------------
+- Bước 1: Đọc kịch bản & Nắm bối cảnh lịch sử, bài học SGK.
+- Bước 2: Phân công nhân vật & Thống nhất vai diễn, ghi tên học sinh.
+- Bước 3: Luyện đọc thoại & Khớp nhịp chuyển cảnh, làm quen cử chỉ gợi ý.
+- Bước 4: Diễn tập thử & Bấm giờ quy định (3–5 phút), dùng thẻ mô phỏng.
+- Bước 5: Thảo luận, Phản hồi & Hỏi đáp người xem, rút ra bài học.
+
+================================================================================
+XÁC THỰC SỐ HÓA: TỔ CHUYÊN MÔN LỊCH SỬ THPT SITUATION (NĂM HỌC 2025 - 2026)
+================================================================================
+`;
+            }
+
             const charsText = (item.characters && item.characters.length > 0)
                 ? item.characters.map((c, idx) => {
                     const isFact = c.type === "HISTORICAL_FACT";
@@ -1263,12 +1839,23 @@ XÁC THỰC SỐ HÓA: TỔ CHUYÊN MÔN LỊCH SỬ THPT SITUATION (NĂM HỌC 
             if (!item) return;
             let fileData = item.fileData;
             let fileName = item.fileName;
-            if (!fileData) {
+            let fileUrl = item.fileUrl;
+            if (!fileData && !fileUrl) {
                 const doc = (typeof documentStore !== "undefined" ? documentStore : []).find(d => d.code === item.code);
-                if (doc && doc.fileData) {
+                if (doc) {
                     fileData = doc.fileData;
                     fileName = doc.fileName;
+                    fileUrl = doc.fileUrl;
                 }
+            }
+            if (fileUrl && (!fileData || fileData.length < 100)) {
+                const a = document.createElement("a");
+                a.href = fileUrl;
+                a.download = fileName || `TepGoc_${item.code}`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                return;
             }
             if (fileData) {
                 downloadDataUrl(fileData, fileName || `KichBan_${item.code}`);
@@ -1565,16 +2152,16 @@ XÁC THỰC SỐ HÓA: TỔ CHUYÊN MÔN LỊCH SỬ THPT SITUATION (2026)
                     const ext = (fileName.slice((fileName.lastIndexOf(".") - 1 >>> 0) + 2) || "FILE").toUpperCase();
                     if (bannerBadgeEl) bannerBadgeEl.textContent = ext;
                     if (bannerIconEl) {
-                        if (ext === "PDF") bannerIconEl.textContent = "📑";
-                        else if (ext === "DOCX" || ext === "DOC") bannerIconEl.textContent = "📘";
-                        else if (ext === "TXT") bannerIconEl.textContent = "📝";
-                        else bannerIconEl.textContent = "📄";
+                        if (ext === "PDF") bannerIconEl.innerHTML = stIcon('doc-pdf', 32);
+                        else if (ext === "DOCX" || ext === "DOC") bannerIconEl.innerHTML = stIcon('doc-word', 32);
+                        else if (ext === "TXT") bannerIconEl.innerHTML = stIcon('doc-txt', 32);
+                        else bannerIconEl.innerHTML = stIcon('doc-file', 32);
                     }
                     if (bannerDescEl) {
                         bannerDescEl.textContent = `Tải về đúng tệp nguyên bản định dạng .${ext} bạn đã tải lên hệ thống (${fileName}).`;
                     }
                     if (bannerBtnTextEl) {
-                        bannerBtnTextEl.textContent = `⬇️ TẢI VỀ ${fileName} NGAY`;
+                        bannerBtnTextEl.innerHTML = `${stIcon('download', 16)} TẢI VỀ ${escapeHtml(fileName)} NGAY`;
                     }
                 } else {
                     bannerEl.style.display = "none";
@@ -1644,16 +2231,16 @@ XÁC THỰC SỐ HÓA: TỔ CHUYÊN MÔN LỊCH SỬ THPT SITUATION (2026)
                     const ext = (effectiveFileName.slice((effectiveFileName.lastIndexOf(".") - 1 >>> 0) + 2) || "FILE").toUpperCase();
                     if (bannerBadgeEl) bannerBadgeEl.textContent = ext;
                     if (bannerIconEl) {
-                        if (ext === "PDF") bannerIconEl.textContent = "📑";
-                        else if (ext === "DOCX" || ext === "DOC") bannerIconEl.textContent = "📘";
-                        else if (ext === "TXT") bannerIconEl.textContent = "📝";
-                        else bannerIconEl.textContent = "📄";
+                        if (ext === "PDF") bannerIconEl.innerHTML = stIcon('doc-pdf', 32);
+                        else if (ext === "DOCX" || ext === "DOC") bannerIconEl.innerHTML = stIcon('doc-word', 32);
+                        else if (ext === "TXT") bannerIconEl.innerHTML = stIcon('doc-txt', 32);
+                        else bannerIconEl.innerHTML = stIcon('doc-file', 32);
                     }
                     if (bannerDescEl) {
                         bannerDescEl.textContent = `Tải về đúng tệp nguyên bản định dạng .${ext} bạn đã tải lên hệ thống (${doc.fileName}).`;
                     }
                     if (bannerBtnTextEl) {
-                        bannerBtnTextEl.textContent = `⬇️ TẢI VỀ ${doc.fileName} NGAY`;
+                        bannerBtnTextEl.innerHTML = `${stIcon('download', 16)} TẢI VỀ ${escapeHtml(doc.fileName)} NGAY`;
                     }
                 } else {
                     bannerEl.style.display = "none";
@@ -2134,7 +2721,7 @@ XÁC THỰC SỐ HÓA: TỔ CHUYÊN MÔN LỊCH SỬ THPT SITUATION (2026)
             if (items.length === 0) {
                 container.innerHTML = `
           <div style="text-align: center; padding: 2.5rem 1rem; background: var(--ivory); border: 1px dashed var(--border); border-radius: 4px;">
-            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📂</div>
+            <div style="color: var(--gold-dark); margin-bottom: 0.5rem;">${stIcon('folder', 40)}</div>
             <h4 style="color: var(--burgundy); margin-bottom: 0.35rem; font-family: var(--font-serif); font-size: 1.15rem;">Không tìm thấy bài viết nào phù hợp</h4>
             <p style="font-size: 0.85rem; color: var(--ink-muted); max-width: 440px; margin: 0 auto 1.25rem; line-height: 1.5;">
               Hãy thử thay đổi từ khóa tìm kiếm, bộ lọc nguồn hoặc chọn khối lớp khác.
@@ -2164,44 +2751,44 @@ XÁC THỰC SỐ HÓA: TỔ CHUYÊN MÔN LỊCH SỬ THPT SITUATION (2026)
                   </div>
                   <div style="flex: 1;">
                     <div style="display: flex; align-items: center; gap: 0.45rem; margin-bottom: 0.3rem; flex-wrap: wrap;">
-                      ${isJustSaved ? `<span style="font-size: 0.74rem; background: #E8F5E9; border: 1px solid #A5D6A7; color: #1B5E20; padding: 0.1rem 0.45rem; border-radius: 3px; font-weight: 700;">✨ Vừa lưu</span>` : ''}
-                      <span style="font-family: monospace; font-weight: 700; background: #FFF3E0; border: 1px solid #FFE0B2; color: #BF360C; padding: 0.12rem 0.5rem; border-radius: 3px; font-size: 0.82rem;">🏷️ Mã đề: ${escapeHtml(examCode)}</span>
+                      ${isJustSaved ? `<span style="font-size: 0.74rem; background: #E8F5E9; border: 1px solid #A5D6A7; color: #1B5E20; padding: 0.1rem 0.45rem; border-radius: 3px; font-weight: 700;">${stIcon('sparkle', 12)} Vừa lưu</span>` : ''}
+                      <span style="font-family: monospace; font-weight: 700; background: #FFF3E0; border: 1px solid #FFE0B2; color: #BF360C; padding: 0.12rem 0.5rem; border-radius: 3px; font-size: 0.82rem;">${stIcon('tag', 13)} Mã đề: ${escapeHtml(examCode)}</span>
                       <span style="font-family: monospace; font-weight: 700; background: var(--burgundy); color: #fff; padding: 0.12rem 0.45rem; border-radius: 3px; font-size: 0.78rem;">${escapeHtml(post.code)}</span>
                       <span style="font-size: 0.76rem; background: var(--ivory); border: 1px solid var(--gold); color: var(--burgundy); padding: 0.12rem 0.45rem; border-radius: 3px; font-weight: 600;">Khối ${escapeHtml(post.grade)}</span>
                       ${isTeacher
-                        ? `<span style="font-size: 0.74rem; background: #E8F5E9; border: 1px solid #C8E6C9; color: #2E7D32; padding: 0.1rem 0.45rem; border-radius: 3px; font-weight: 600;">✍️ Giáo viên đăng</span>`
-                        : `<span style="font-size: 0.74rem; background: #EDE7F6; border: 1px solid #D1C4E9; color: #512DA8; padding: 0.1rem 0.45rem; border-radius: 3px; font-weight: 600;">🏛️ Hệ thống</span>`
+                        ? `<span style="font-size: 0.74rem; background: #E8F5E9; border: 1px solid #C8E6C9; color: #2E7D32; padding: 0.1rem 0.45rem; border-radius: 3px; font-weight: 600;">${stIcon('quill', 12)} Giáo viên đăng</span>`
+                        : `<span style="font-size: 0.74rem; background: #EDE7F6; border: 1px solid #D1C4E9; color: #512DA8; padding: 0.1rem 0.45rem; border-radius: 3px; font-weight: 600;">${stIcon('temple', 12)} Hệ thống</span>`
                     }
-                      ${post.createdAt ? `<span style="font-size: 0.75rem; color: var(--ink-muted);">📅 ${escapeHtml(post.createdAt)}</span>` : ""}
+                      ${post.createdAt ? `<span style="font-size: 0.75rem; color: var(--ink-muted);">${stIcon('clock', 12)} ${escapeHtml(post.createdAt)}</span>` : ""}
                     </div>
                     <h4 style="margin: 0.2rem 0 0.35rem 0; font-size: 1.02rem; color: var(--burgundy); font-family: var(--font-serif);">${escapeHtml(post.lesson)}</h4>
                     <div style="font-size: 0.82rem; color: var(--ink-muted); display: flex; gap: 0.85rem; flex-wrap: wrap;">
-                      <span>👤 ${isTeacher ? `Biên soạn: <strong style="color:var(--ink);">${escapeHtml(post.author || 'Giáo viên')}</strong> (${escapeHtml(post.school || 'THPT')})` : `Nguồn: <strong>${escapeHtml(post.sources || 'SGK Lịch sử')}</strong>`}</span>
-                      <span>📄 Tệp đính kèm: ${hasFile ? `<strong style="color: #2E7D32;">${escapeHtml(post.fileName || 'KichBan')}</strong> ${sizeKb ? `(${sizeKb} KB)` : ''}` : '<span style="color: #2E7D32; font-weight: 600;">Sẵn sàng xuất các định dạng</span>'}</span>
+                      <span>${stIcon('teacher', 13)} ${isTeacher ? `Biên soạn: <strong style="color:var(--ink);">${escapeHtml(post.author || 'Giáo viên')}</strong> (${escapeHtml(post.school || 'THPT')})` : `Nguồn: <strong>${escapeHtml(post.sources || 'SGK Lịch sử')}</strong>`}</span>
+                      <span>${stIcon('doc-file', 13)} Tệp đính kèm: ${hasFile ? `<strong style="color: #2E7D32;">${escapeHtml(post.fileName || 'KichBan')}</strong> ${sizeKb ? `(${sizeKb} KB)` : ''}` : '<span style="color: #2E7D32; font-weight: 600;">Sẵn sàng xuất các định dạng</span>'}</span>
                     </div>
                   </div>
                 </div>
 
                 <div style="display: flex; gap: 0.45rem; align-items: center; flex-wrap: wrap;">
-                  <button type="button" class="btn-secondary" style="font-size: 0.78rem; padding: 0.35rem 0.65rem; color: #0D47A1; border-color: #90CAF9; background: #E3F2FD; font-weight: 600;" onclick="openDetailModal('${escapeHtml(post.code)}', true)">
-                    👁️ Xem
+                  <button type="button" class="btn-secondary" data-label="👁️ Xem" style="font-size: 0.78rem; padding: 0.35rem 0.65rem; color: #0D47A1; border-color: #90CAF9; background: #E3F2FD; font-weight: 600;" onclick="openDetailModal('${escapeHtml(post.code)}', true)">
+                    ${stIcon('eye', 14)} Xem
                   </button>
                   ${hasFile
                     ? `<button type="button" class="btn-secondary" style="font-size: 0.78rem; padding: 0.35rem 0.65rem; color: #1B5E20; border-color: #81C784; background: #E8F5E9; font-weight: 700;" onclick="exportLessonOriginalFile(catalogData.find(i=>i.code==='${escapeHtml(post.code)}'))" title="Tải đúng tệp đã tải lên (${escapeHtml(post.fileName || 'tệp gốc')})">
-                        ⬇️ Tải ${escapeHtml(post.fileName || 'tệp')}
+                        ${stIcon('download', 14)} Tải ${escapeHtml(post.fileName || 'tệp')}
                        </button>
                        <button type="button" class="btn-secondary" style="font-size: 0.78rem; padding: 0.35rem 0.5rem; color: var(--ink-muted);" onclick="downloadTeacherWordFile('${escapeHtml(post.code)}')" title="Tùy chọn xuất định dạng khác">
-                        ⚙️ Đổi dạng
+                        ${stIcon('folder', 13)} Đổi dạng
                        </button>`
                     : `<button type="button" class="btn-secondary" style="font-size: 0.78rem; padding: 0.35rem 0.65rem; color: #1B5E20; border-color: #81C784; background: #E8F5E9; font-weight: 600;" onclick="downloadTeacherWordFile('${escapeHtml(post.code)}')">
-                        ⬇️ Tải về
+                        ${stIcon('download', 14)} Tải về
                        </button>`
                   }
                   <button type="button" class="btn-secondary" style="font-size: 0.78rem; padding: 0.35rem 0.65rem; color: var(--burgundy); border-color: var(--gold); font-weight: 600;" onclick="openTeacherPostModal('${escapeHtml(post.code)}')">
-                    ✏️ Sửa
+                    ${stIcon('quill', 14)} Sửa
                   </button>
                   <button type="button" class="btn-secondary" style="font-size: 0.78rem; padding: 0.35rem 0.65rem; color: #C62828; border-color: #E57373; background: #FFF5F5; font-weight: 700;" onclick="deleteTeacherPost('${escapeHtml(post.code)}')">
-                    🗑️ Xóa
+                    ${stIcon('trash', 14)} Xóa
                   </button>
                 </div>
               </div>
@@ -2227,7 +2814,7 @@ XÁC THỰC SỐ HÓA: TỔ CHUYÊN MÔN LỊCH SỬ THPT SITUATION (2026)
             if (editCodeEl) editCodeEl.value = "";
 
             const headingEl = document.getElementById("teacherModalHeading");
-            if (headingEl) headingEl.textContent = "✍️ Tải lên Kịch bản & File Word Hoạt cảnh";
+            if (headingEl) headingEl.innerHTML = `${stIcon('quill', 20)} Tải lên Kịch bản & File Word Hoạt cảnh`;
 
             const btnDeleteCurrent = document.getElementById("btnDeleteCurrentEdit");
             if (btnDeleteCurrent) btnDeleteCurrent.style.display = "none";
@@ -2250,6 +2837,22 @@ XÁC THỰC SỐ HÓA: TỔ CHUYÊN MÔN LỊCH SỬ THPT SITUATION (2026)
         }
 
         function openTeacherPostModal(codeToEdit = "") {
+            // Tự động kiểm tra quyền Admin nếu người dùng đã bật nút Quản trị viên
+            const adminActive = (typeof window !== "undefined" && window.isAdmin) || (typeof isAdmin !== "undefined" && isAdmin);
+            if (adminActive && (!isTeacherAuthenticated || !sessionTeacherKey)) {
+                isTeacherAuthenticated = true;
+                sessionTeacherKey = "SECURE#2026$GV-HIST@SITUATION";
+                if (typeof window !== "undefined") {
+                    window.isTeacherAuthenticated = true;
+                    window.sessionTeacherKey = sessionTeacherKey;
+                    try {
+                        if (typeof sessionStorage !== "undefined") {
+                            sessionStorage.setItem("situation_teacher_session_key", sessionTeacherKey);
+                        }
+                    } catch (e) { }
+                }
+            }
+
             // Bắt buộc phải qua bước nhập mã khóa bảo mật
             if (!isTeacherAuthenticated || !sessionTeacherKey || !TEACHER_AUTH_KEYS[sessionTeacherKey]) {
                 openTeacherAuthGate(codeToEdit);
@@ -2259,7 +2862,7 @@ XÁC THỰC SỐ HÓA: TỔ CHUYÊN MÔN LỊCH SỬ THPT SITUATION (2026)
             const activeKeyInfo = TEACHER_AUTH_KEYS[sessionTeacherKey];
             const headerBadge = document.getElementById("teacherAuthHeaderBadge");
             if (headerBadge) {
-                headerBadge.innerHTML = `🔑 Phiên làm việc Giáo viên • Quyền: <strong>${escapeHtml(activeKeyInfo.role)}</strong>`;
+                headerBadge.innerHTML = `${stIcon('key', 14)} Phiên làm việc Giáo viên • Quyền: <strong>${escapeHtml(activeKeyInfo.role)}</strong>`;
                 headerBadge.style.color = activeKeyInfo.color;
                 headerBadge.style.background = activeKeyInfo.bg;
                 headerBadge.style.borderColor = activeKeyInfo.color;
@@ -2270,10 +2873,12 @@ XÁC THỰC SỐ HÓA: TỔ CHUYÊN MÔN LỊCH SỬ THPT SITUATION (2026)
 
             const btnDeleteCurrent = document.getElementById("btnDeleteCurrentEdit");
 
+            const postModal = document.getElementById("teacherPostModal");
+
             if (codeToEdit) {
                 const item = catalogData.find(i => i.code === codeToEdit);
                 if (item) {
-                    document.getElementById("teacherModalHeading").textContent = "✏️ Cập nhật Kịch bản Word: " + item.code;
+                    document.getElementById("teacherModalHeading").innerHTML = `${stIcon('quill', 20)} Cập nhật Kịch bản Word: ` + escapeHtml(item.code);
                     document.getElementById("teacherEditCode").value = item.code;
                     document.getElementById("teacherGrade").value = item.grade || "10";
                     document.getElementById("teacherTitle").value = item.lesson || "";
@@ -2298,7 +2903,10 @@ XÁC THỰC SỐ HÓA: TỔ CHUYÊN MÔN LỊCH SỬ THPT SITUATION (2026)
                     if (btnDeleteCurrent) btnDeleteCurrent.style.display = "inline-flex";
 
                     switchTeacherModalTab("upload");
-                    document.getElementById("teacherPostModal").classList.add("open");
+                    if (postModal) {
+                        postModal.classList.add("open");
+                        postModal.style.display = "flex";
+                    }
                     return;
                 }
             }
@@ -2308,17 +2916,35 @@ XÁC THỰC SỐ HÓA: TỔ CHUYÊN MÔN LỊCH SỬ THPT SITUATION (2026)
 
             switchTeacherModalTab("upload");
             updateTeacherPostCountBadge();
-            document.getElementById("teacherPostModal").classList.add("open");
+            if (postModal) {
+                postModal.classList.add("open");
+                postModal.style.display = "flex";
+            }
         }
 
         function closeTeacherPostModal() {
-            document.getElementById("teacherPostModal").classList.remove("open");
+            const postModal = document.getElementById("teacherPostModal");
+            if (postModal) {
+                postModal.classList.remove("open");
+                postModal.style.display = "none";
+            }
         }
 
         // ==========================================
         // LƯU BÀI ĐĂNG GIÁO VIÊN VÀO SQL
         // ==========================================
         function saveTeacherPost() {
+            // Tự động cấp quyền nếu đang là Admin
+            const adminActive = (typeof window !== "undefined" && window.isAdmin) || (typeof isAdmin !== "undefined" && isAdmin);
+            if (adminActive && (!sessionTeacherKey || !isTeacherAuthenticated)) {
+                sessionTeacherKey = "SECURE#2026$GV-HIST@SITUATION";
+                isTeacherAuthenticated = true;
+                if (typeof window !== "undefined") {
+                    window.isTeacherAuthenticated = true;
+                    window.sessionTeacherKey = sessionTeacherKey;
+                }
+            }
+
             // 1. Kiểm tra xác thực phiên & mã khóa
             const authKey = (typeof window !== "undefined" && window.sessionTeacherKey) ? window.sessionTeacherKey : (sessionTeacherKey || (document.getElementById("teacherAuthKey") ? document.getElementById("teacherAuthKey").value.trim() : ""));
             const keyInfo = TEACHER_AUTH_KEYS[authKey];
@@ -2369,123 +2995,133 @@ XÁC THỰC SỐ HÓA: TỔ CHUYÊN MÔN LỊCH SỬ THPT SITUATION (2026)
             if (submitBtn) {
                 originalBtnHtml = submitBtn.innerHTML;
                 submitBtn.disabled = true;
-                submitBtn.innerHTML = "⏳ Đang lưu vào CSDL SQL...";
+                submitBtn.innerHTML = `${stIcon('clock', 16)} Đang lưu vào CSDL SQL...`;
             }
 
-            // 3. Tự sinh mã định danh nếu là bài đăng mới
-            let code = editCode;
-            if (!code) {
-                const gradeItems = catalogData.filter(i => i.grade === grade && i.code.includes(".W"));
-                let nextIndex = 1;
-                gradeItems.forEach(i => {
-                    const m = i.code.match(/\.W(\d+)/i);
-                    if (m) {
-                        const num = parseInt(m[1], 10);
-                        if (num >= nextIndex) nextIndex = num + 1;
-                    }
+            try {
+                // 3. Tự sinh mã định danh nếu là bài đăng mới
+                let code = editCode;
+                if (!code) {
+                    const gradeItems = catalogData.filter(i => i.grade === grade && i.code.includes(".W"));
+                    let nextIndex = 1;
+                    gradeItems.forEach(i => {
+                        const m = i.code.match(/\.W(\d+)/i);
+                        if (m) {
+                            const num = parseInt(m[1], 10);
+                            if (num >= nextIndex) nextIndex = num + 1;
+                        }
+                    });
+                    code = `${grade}.W${String(nextIndex).padStart(2, "0")}`;
+                }
+
+                const docId = `DOC-${code.replace(/[^A-Z0-9]/gi, "")}`;
+
+                const fileExt = fileName ? fileName.slice((fileName.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase() : "";
+                let postFormat = "Kịch bản Word";
+                let docFormat = "DOCX";
+                if (fileExt === "pdf") {
+                    postFormat = "Tài liệu PDF";
+                    docFormat = "PDF";
+                } else if (fileExt === "doc") {
+                    postFormat = "Kịch bản Word (.doc)";
+                    docFormat = "DOC";
+                } else if (fileExt === "docx") {
+                    postFormat = "Kịch bản Word (.docx)";
+                    docFormat = "DOCX";
+                } else if (fileExt === "txt") {
+                    postFormat = "Văn bản Text (.txt)";
+                    docFormat = "TXT";
+                }
+
+                // 4. Tạo đối tượng bài đăng danh mục
+                const postData = {
+                    code,
+                    grade,
+                    examCode: examCode,
+                    topic: `Kịch bản Hoạt cảnh Khối ${grade}`,
+                    lesson: title,
+                    scenario: summary || `Kịch bản hoạt cảnh chi tiết trong tệp đính kèm: ${fileName || 'Bản Word'}`,
+                    format: postFormat,
+                    focus: `Kịch bản (Mã đề: ${examCode}) do Thầy/Cô ${author} biên soạn, lưu trữ tệp ${fileExt ? fileExt.toUpperCase() : 'tài liệu'} (${fileName || 'nguyên bản'}) trong CSDL phục vụ giảng dạy.`,
+                    originType: "TEACHER_CONTRIBUTED",
+                    author,
+                    school: school || "Giáo viên Lịch sử THPT",
+                    createdAt: new Date().toISOString().slice(0, 10),
+                    authKeyUsed: authKey,
+                    authLevel: keyInfo.level,
+                    authRole: keyInfo.role,
+                    fileName: fileName || (fileBase64 ? `${code}_KichBan.${fileExt || 'docx'}` : ""),
+                    fileSize: fileSize,
+                    fileType: fileType,
+                    fileData: fileBase64,
+                    characters: [
+                        { name: "Nhân vật trong kịch bản", type: "CREATIVE_REP", desc: `Xem chi tiết lời thoại và phân vai trong tệp đính kèm: ${fileName || 'Kịch bản'}` }
+                    ],
+                    relatedDocs: [docId],
+                    sources: `Biên soạn bởi Thầy/Cô ${author} (${school || "Giáo viên THPT"}) - Mã đề: ${examCode} - Xác thực quyền: ${keyInfo.role}`
+                };
+
+                // 5. Tạo đối tượng tài liệu lưu trữ & nạp vào RAG
+                const docData = {
+                    id: docId,
+                    title: fileExt === "pdf" ? `Hồ sơ tài liệu PDF (${code}): ${title}` : `Hồ sơ kịch bản (${code}): ${title}`,
+                    code: code,
+                    grade: grade,
+                    examCode: examCode,
+                    format: docFormat,
+                    updatedAt: new Date().toISOString().slice(0, 10),
+                    source: `Biên soạn: ${author} (${school || "THPT"}) - Mã đề: ${examCode} - Mã xác thực: ${authKey}`,
+                    fileName: fileName,
+                    fileSize: fileSize,
+                    fileData: fileBase64,
+                    content: `MÃ BÀI HỌC: ${code}\nMÃ ĐỀ: ${examCode}\nTIÊU ĐỀ: ${title}\nKHỐI LỚP: ${grade}\nNGƯỜI BIÊN SOẠN: ${author} (${school || "Giáo viên Lịch sử THPT"})\nQUYỀN XÁC THỰC: ${keyInfo.level} (${keyInfo.role})\nTỆP ĐÍNH KÈM: ${fileName || "Không có tệp"} ${fileSize ? `(${Math.round(fileSize / 1024)} KB • ${fileExt.toUpperCase()})` : ""}\n\nTÓM TẮT & HƯỚNG DẪN HOẠT CẢNH:\n${summary || "Kịch bản chi tiết được lưu trữ trong tệp đính kèm. Giáo viên và học sinh có thể tải trực tiếp về máy tính từ CSDL."}`
+                };
+
+                // 6. Lưu trữ CSDL & Đồng bộ toàn diện 100% qua commitDatabaseMutation
+                commitDatabaseMutation('TEACHER_POST_SAVED', {
+                    post: postData,
+                    doc: docData,
+                    author: postData.author,
+                    lesson: postData.lesson,
+                    code: postData.code
                 });
-                code = `${grade}.W${String(nextIndex).padStart(2, "0")}`;
+
+                // Ghi nhận mã vừa lưu để làm nổi bật trong danh sách
+                _lastSavedPostCode = code;
+                if (_lastSavedTimer) clearTimeout(_lastSavedTimer);
+                _lastSavedTimer = setTimeout(() => { _lastSavedPostCode = null; }, 6000);
+
+                // Thông báo lưu thành công không chặn luồng UI
+                notifyTeacher({
+                    title: "🎉 ĐÃ LƯU BÀI ĐĂNG THÀNH CÔNG!",
+                    message: `Đã lưu "${code} (Mã đề: ${examCode}) - ${title}" (${fileName || postFormat}) vào CSDL SQL và đồng bộ tức thì.`,
+                    badge: "✍️",
+                    code: code,
+                    actionText: "👁️ Xem bài ngay",
+                    duration: 6000,
+                    fallbackAlert: `🎉 ĐÃ LƯU BÀI ĐĂNG THÀNH CÔNG!\n\n• Mã bài: ${code}\n• Mã đề: ${examCode}\n• Tiêu đề: ${title}\n• Giáo viên: ${author}\n• Định dạng: ${postFormat}\n• Tệp đính kèm: ${fileName || "Đã lưu trữ"}\n\nDữ liệu và tệp đã được lưu bền vững vào CSDL và đồng bộ tới toàn bộ hệ thống.`
+                });
+
+                // Reset form chuẩn bị bài mới
+                resetTeacherPostForm();
+
+                // Chuyển sang Tab 2: Quản lý bài đã đăng để giáo viên thấy ngay bài viết vừa lưu ở đầu bảng
+                switchTeacherModalTab("manage");
+            } catch (err) {
+                console.error("Lỗi khi lưu bài đăng:", err);
+                notifyTeacher({
+                    title: "❌ LỖI KHI LƯU BÀI",
+                    message: "Có lỗi xảy ra trong quá trình lưu bài: " + (err.message || err),
+                    badge: "❌",
+                    fallbackAlert: "❌ Có lỗi xảy ra trong quá trình lưu bài: " + (err.message || err)
+                });
+            } finally {
+                // Luôn khôi phục trạng thái nút lưu đảm bảo không bao giờ bị liệt
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalBtnHtml || `${stIcon('rocket', 16)} Tải lên & Lưu vào CSDL SQL`;
+                }
             }
-
-            const docId = `DOC-${code.replace(/[^A-Z0-9]/gi, "")}`;
-
-            const fileExt = fileName ? fileName.slice((fileName.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase() : "";
-            let postFormat = "Kịch bản Word";
-            let docFormat = "DOCX";
-            if (fileExt === "pdf") {
-                postFormat = "Tài liệu PDF";
-                docFormat = "PDF";
-            } else if (fileExt === "doc") {
-                postFormat = "Kịch bản Word (.doc)";
-                docFormat = "DOC";
-            } else if (fileExt === "docx") {
-                postFormat = "Kịch bản Word (.docx)";
-                docFormat = "DOCX";
-            } else if (fileExt === "txt") {
-                postFormat = "Văn bản Text (.txt)";
-                docFormat = "TXT";
-            }
-
-            // 4. Tạo đối tượng bài đăng danh mục
-            const postData = {
-                code,
-                grade,
-                examCode: examCode,
-                topic: `Kịch bản Hoạt cảnh Khối ${grade}`,
-                lesson: title,
-                scenario: summary || `Kịch bản hoạt cảnh chi tiết trong tệp đính kèm: ${fileName || 'Bản Word'}`,
-                format: postFormat,
-                focus: `Kịch bản (Mã đề: ${examCode}) do Thầy/Cô ${author} biên soạn, lưu trữ tệp ${fileExt ? fileExt.toUpperCase() : 'tài liệu'} (${fileName || 'nguyên bản'}) trong CSDL phục vụ giảng dạy.`,
-                originType: "TEACHER_CONTRIBUTED",
-                author,
-                school: school || "Giáo viên Lịch sử THPT",
-                createdAt: new Date().toISOString().slice(0, 10),
-                authKeyUsed: authKey,
-                authLevel: keyInfo.level,
-                authRole: keyInfo.role,
-                fileName: fileName || (fileBase64 ? `${code}_KichBan.${fileExt || 'docx'}` : ""),
-                fileSize: fileSize,
-                fileType: fileType,
-                fileData: fileBase64,
-                characters: [
-                    { name: "Nhân vật trong kịch bản", type: "CREATIVE_REP", desc: `Xem chi tiết lời thoại và phân vai trong tệp đính kèm: ${fileName || 'Kịch bản'}` }
-                ],
-                relatedDocs: [docId],
-                sources: `Biên soạn bởi Thầy/Cô ${author} (${school || "Giáo viên THPT"}) - Mã đề: ${examCode} - Xác thực quyền: ${keyInfo.role}`
-            };
-
-            // 5. Tạo đối tượng tài liệu lưu trữ & nạp vào RAG
-            const docData = {
-                id: docId,
-                title: fileExt === "pdf" ? `Hồ sơ tài liệu PDF (${code}): ${title}` : `Hồ sơ kịch bản (${code}): ${title}`,
-                code: code,
-                grade: grade,
-                examCode: examCode,
-                format: docFormat,
-                updatedAt: new Date().toISOString().slice(0, 10),
-                source: `Biên soạn: ${author} (${school || "THPT"}) - Mã đề: ${examCode} - Mã xác thực: ${authKey}`,
-                fileName: fileName,
-                fileSize: fileSize,
-                fileData: fileBase64,
-                content: `MÃ BÀI HỌC: ${code}\nMÃ ĐỀ: ${examCode}\nTIÊU ĐỀ: ${title}\nKHỐI LỚP: ${grade}\nNGƯỜI BIÊN SOẠN: ${author} (${school || "Giáo viên Lịch sử THPT"})\nQUYỀN XÁC THỰC: ${keyInfo.level} (${keyInfo.role})\nTỆP ĐÍNH KÈM: ${fileName || "Không có tệp"} ${fileSize ? `(${Math.round(fileSize / 1024)} KB • ${fileExt.toUpperCase()})` : ""}\n\nTÓM TẮT & HƯỚNG DẪN HOẠT CẢNH:\n${summary || "Kịch bản chi tiết được lưu trữ trong tệp đính kèm. Giáo viên và học sinh có thể tải trực tiếp về máy tính từ CSDL."}`
-            };
-
-            // 6. Lưu trữ CSDL & Đồng bộ toàn diện 100% qua commitDatabaseMutation
-            commitDatabaseMutation('TEACHER_POST_SAVED', {
-                post: postData,
-                doc: docData,
-                author: postData.author,
-                lesson: postData.lesson,
-                code: postData.code
-            });
-
-            // Khôi phục trạng thái nút lưu
-            if (submitBtn) {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = originalBtnHtml || "🚀 Tải lên & Lưu vào CSDL SQL";
-            }
-
-            // Ghi nhận mã vừa lưu để làm nổi bật trong danh sách
-            _lastSavedPostCode = code;
-            if (_lastSavedTimer) clearTimeout(_lastSavedTimer);
-            _lastSavedTimer = setTimeout(() => { _lastSavedPostCode = null; }, 6000);
-
-            // Thông báo lưu thành công không chặn luồng UI
-            notifyTeacher({
-                title: "🎉 ĐÃ LƯU BÀI ĐĂNG THÀNH CÔNG!",
-                message: `Đã lưu "${code} (Mã đề: ${examCode}) - ${title}" (${fileName || postFormat}) vào CSDL SQL và đồng bộ tức thì.`,
-                badge: "✍️",
-                code: code,
-                actionText: "👁️ Xem bài ngay",
-                duration: 6000,
-                fallbackAlert: `🎉 ĐÃ LƯU BÀI ĐĂNG THÀNH CÔNG!\n\n• Mã bài: ${code}\n• Mã đề: ${examCode}\n• Tiêu đề: ${title}\n• Giáo viên: ${author}\n• Định dạng: ${postFormat}\n• Tệp đính kèm: ${fileName || "Đã lưu trữ"}\n\nDữ liệu và tệp đã được lưu bền vững vào CSDL và đồng bộ tới toàn bộ hệ thống.`
-            });
-
-            // Reset form chuẩn bị bài mới
-            resetTeacherPostForm();
-
-            // Chuyển sang Tab 2: Quản lý bài đã đăng để giáo viên thấy ngay bài viết vừa lưu ở đầu bảng
-            switchTeacherModalTab("manage");
         }
 
         // ==========================================
@@ -2679,14 +3315,36 @@ XÁC THỰC SỐ HÓA: TỔ CHUYÊN MÔN LỊCH SỬ THPT SITUATION (2026)
         function saveTeacherPostsToStorage() { 
             try {
                 const teacherPosts = catalogData.filter(i => i.originType === "TEACHER_CONTRIBUTED");
-                localStorage.setItem("situation_teacher_posts", JSON.stringify(teacherPosts));
+                try {
+                    localStorage.setItem("situation_teacher_posts", JSON.stringify(teacherPosts));
+                } catch (quotaErr) {
+                    // Quota exceeded: lưu metadata bài viết, tệp gốc bảo toàn trong IndexedDB
+                    console.warn("localStorage quota exceeded, lưu bản tinh gọn:", quotaErr);
+                    const lightPosts = teacherPosts.map(p => {
+                        const copy = { ...p };
+                        if (copy.fileData && copy.fileData.length > 50000) delete copy.fileData;
+                        return copy;
+                    });
+                    localStorage.setItem("situation_teacher_posts", JSON.stringify(lightPosts));
+                }
 
                 const teacherDocs = documentStore.filter(d => teacherPosts.some(p => p.code === d.code));
-                localStorage.setItem("situation_teacher_docs", JSON.stringify(teacherDocs));
+                try {
+                    localStorage.setItem("situation_teacher_docs", JSON.stringify(teacherDocs));
+                } catch (quotaErr) {
+                    const lightDocs = teacherDocs.map(d => {
+                        const copy = { ...d };
+                        if (copy.fileData && copy.fileData.length > 50000) delete copy.fileData;
+                        return copy;
+                    });
+                    localStorage.setItem("situation_teacher_docs", JSON.stringify(lightDocs));
+                }
 
                 // Lưu trữ cả các tài liệu tự thêm ngoài SGK
                 const customDocs = documentStore.filter(d => !teacherDocs.some(td => td.id === d.id) && !d.id.startsWith("DOC-10") && !d.id.startsWith("DOC-11") && !d.id.startsWith("DOC-12"));
-                localStorage.setItem("situation_custom_docs", JSON.stringify(customDocs));
+                try {
+                    localStorage.setItem("situation_custom_docs", JSON.stringify(customDocs));
+                } catch (e) {}
             } catch (e) {
                 console.warn("Lỗi lưu trữ bài đăng vào localStorage:", e);
             }
@@ -2709,6 +3367,30 @@ XÁC THỰC SỐ HÓA: TỔ CHUYÊN MÔN LỊCH SỬ THPT SITUATION (2026)
                 if (deletedCodes.length > 0) {
                     catalogData = catalogData.filter(i => !deletedCodes.includes(i.code));
                     documentStore = documentStore.filter(d => !deletedCodes.includes(d.code) && !deletedCodes.some(dc => d.id === `DOC-${dc.replace(/[^A-Z0-9]/gi, "")}`));
+                }
+
+                // Nạp các bài đăng giáo viên chính thức từ OFFICIAL_TEACHER_POSTS nếu có
+                const officialPosts = (typeof window !== "undefined" && window.OFFICIAL_TEACHER_POSTS) ? window.OFFICIAL_TEACHER_POSTS : (typeof OFFICIAL_TEACHER_POSTS !== "undefined" ? OFFICIAL_TEACHER_POSTS : []);
+                if (Array.isArray(officialPosts)) {
+                    officialPosts.forEach(post => {
+                        if (!deletedCodes.includes(post.code)) {
+                            const idx = catalogData.findIndex(i => i.code === post.code);
+                            if (idx >= 0) catalogData[idx] = post;
+                            else catalogData.unshift(post);
+                        }
+                    });
+                }
+
+                const officialDocs = (typeof window !== "undefined" && window.OFFICIAL_TEACHER_DOCS) ? window.OFFICIAL_TEACHER_DOCS : (typeof OFFICIAL_TEACHER_DOCS !== "undefined" ? OFFICIAL_TEACHER_DOCS : []);
+                if (Array.isArray(officialDocs)) {
+                    officialDocs.forEach(doc => {
+                        const isDocDeleted = deletedCodes.includes(doc.code) || deletedCodes.some(dc => doc.id === `DOC-${dc.replace(/[^A-Z0-9]/gi, "")}`);
+                        if (!isDocDeleted) {
+                            const idx = documentStore.findIndex(d => d.id === doc.id);
+                            if (idx >= 0) documentStore[idx] = doc;
+                            else documentStore.unshift(doc);
+                        }
+                    });
                 }
 
                 const savedPostsJson = localStorage.getItem("situation_teacher_posts");
@@ -2790,7 +3472,7 @@ XÁC THỰC SỐ HÓA: TỔ CHUYÊN MÔN LỊCH SỬ THPT SITUATION (2026)
             if (subs.length === 0) {
                 container.innerHTML = `
                     <div style="text-align: center; padding: 2.5rem 1rem; background: var(--ivory); border: 1px dashed var(--border); border-radius: 4px;">
-                        <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📬</div>
+                        <div style="color: var(--gold-dark); margin-bottom: 0.5rem;">${stIcon('inbox', 40)}</div>
                         <h4 style="color: var(--burgundy); margin-bottom: 0.35rem; font-family: var(--font-serif); font-size: 1.15rem;">Chưa có bài nộp nào từ Học sinh</h4>
                         <p style="font-size: 0.85rem; color: var(--ink-muted); max-width: 440px; margin: 0 auto; line-height: 1.5;">
                             Khi học sinh mở các bài học kịch bản và gửi bài phân vai, toàn bộ bài nộp sẽ xuất hiện tại đây theo thời gian thực để Thầy/Cô chấm điểm.
@@ -2812,14 +3494,14 @@ XÁC THỰC SỐ HÓA: TỔ CHUYÊN MÔN LỊCH SỬ THPT SITUATION (2026)
                                         <span style="font-size: 0.76rem; background: #EDE7F6; color: #512DA8; padding: 0.1rem 0.45rem; border-radius: 3px; font-weight: 600;">Vai: ${escapeHtml(sub.roleName)}</span>
                                     </div>
                                     <div style="font-size: 0.85rem; color: #333;">
-                                        👤 Học sinh / Nhóm: <strong>${escapeHtml(sub.studentName)}</strong>
-                                        <span style="font-size: 0.78rem; color: var(--ink-muted); margin-left: 0.5rem;">📅 Nộp lúc: ${escapeHtml(sub.submittedAt)}</span>
+                                        ${stIcon('cap', 14)} Học sinh / Nhóm: <strong>${escapeHtml(sub.studentName)}</strong>
+                                        <span style="font-size: 0.78rem; color: var(--ink-muted); margin-left: 0.5rem;">${stIcon('clock', 13)} Nộp lúc: ${escapeHtml(sub.submittedAt)}</span>
                                     </div>
                                 </div>
                                 <div>
                                     ${sub.status === 'GRADED'
-                                        ? `<span style="font-size: 0.8rem; background: #E8F5E9; color: #2E7D32; font-weight: 700; padding: 0.2rem 0.55rem; border-radius: 3px;">✅ Đã chấm: ${escapeHtml(sub.teacherGrade)}</span>`
-                                        : `<span style="font-size: 0.8rem; background: #FFF3E0; color: #E65100; font-weight: 700; padding: 0.2rem 0.55rem; border-radius: 3px;">⏳ Chờ chấm điểm</span>`
+                                        ? `<span style="font-size: 0.8rem; background: #E8F5E9; color: #2E7D32; font-weight: 700; padding: 0.2rem 0.55rem; border-radius: 3px;">${stIcon('check', 13)} Đã chấm: ${escapeHtml(sub.teacherGrade)}</span>`
+                                        : `<span style="font-size: 0.8rem; background: #FFF3E0; color: #E65100; font-weight: 700; padding: 0.2rem 0.55rem; border-radius: 3px;">${stIcon('clock', 13)} Chờ chấm điểm</span>`
                                     }
                                 </div>
                             </div>
@@ -2838,7 +3520,7 @@ XÁC THỰC SỐ HÓA: TỔ CHUYÊN MÔN LỊCH SỬ THPT SITUATION (2026)
                                 </div>
                                 <div style="display: flex; justify-content: flex-end;">
                                     <button type="button" class="btn-primary" style="background: #33691E; border-color: #1B5E20; font-size: 0.82rem; padding: 0.3rem 0.85rem; cursor: pointer;" onclick="submitTeacherFeedback('${sub.id}')">
-                                        💾 Lưu Điểm & Nhận xét (Đồng bộ tức thì)
+                                        ${stIcon('check', 14)} Lưu Điểm & Nhận xét (Đồng bộ tức thì)
                                     </button>
                                 </div>
                             </div>
@@ -2949,6 +3631,7 @@ if (typeof window !== "undefined") {
     window.updateTeacherPostCountBadge = updateTeacherPostCountBadge;
     window.updateTeacherSubmissionsCountBadge = updateTeacherSubmissionsCountBadge;
     window.toggleDrumRotation = toggleDrumRotation;
+    window.setDongSonBgMode = setDongSonBgMode;
     window.toggleDetailInlinePreview = toggleDetailInlinePreview;
     window.viewUploadedItemFile = viewUploadedItemFile;
     window.onTeacherGradeChange = onTeacherGradeChange;

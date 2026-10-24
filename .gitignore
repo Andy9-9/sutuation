@@ -11,6 +11,7 @@ Thumbs.db
 # Temporary & Scratch Files
 scratch/
 *.log
+dist/
 
 # Editor & Agent Directories
 .vscode/
